@@ -8,6 +8,19 @@ from datetime import datetime, timezone
 GRAVEYARD_PATH = os.path.join("docs", "strategy_graveyard.md")
 
 
+def record_note(text: str) -> None:
+    """Appends a dated banner to the graveyard -- used to mark a methodology change.
+
+    The file is append-only and code-written by rule, so a change that invalidates earlier
+    entries is recorded by adding to the record, never by editing or deleting what is
+    already there. A superseded FAIL is still evidence; a rewritten one is not.
+    """
+    os.makedirs(os.path.dirname(GRAVEYARD_PATH), exist_ok=True)
+    with open(GRAVEYARD_PATH, "a", encoding="utf-8") as f:
+        f.write(f"\n---\n\n### Methodology note -- {datetime.now(timezone.utc).isoformat(timespec='seconds')}\n\n")
+        f.write(text.rstrip() + "\n\n---\n\n")
+
+
 def record_result(strategy_name: str, symbol: str, validation, extra_notes: str = "") -> None:
     os.makedirs(os.path.dirname(GRAVEYARD_PATH), exist_ok=True)
     write_header = not os.path.exists(GRAVEYARD_PATH)

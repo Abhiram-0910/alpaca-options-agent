@@ -1660,3 +1660,339 @@ Every backtest validation run for every strategy/symbol combination, pass or fai
 - sharpe 95% bootstrap CI: (-3.425, 0.177)
 - rejection reasons: mean-return 95% bootstrap CI (-0.11886, 0.00457) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-3.425, 0.177) does not exclude zero (lower bound must be > 0)
 
+
+---
+
+### Methodology note -- 2026-09-01T20:53:35+00:00
+
+Bootstrap changed from i.i.d. resampling to a circular moving-block bootstrap, block length ceil(hold_days / step_days) per strategy. Measured on a zero-edge random walk, the i.i.d. gate passed 10.8% of samples against a 2.5% nominal rate; the block gate passes 2.5% (test_block_bootstrap.py).
+
+**Every entry above this line was computed with the i.i.d. bootstrap and is superseded.** They are kept because a superseded result is still a record of what was tried, but no PASS above this line may be quoted as validated.
+
+Block length this run: cash_secured_put=3, covered_call=3, long_directional=3, vertical_credit_spread=3, iron_condor=3, iron_condor_vrp_45_21=7, vertical_credit_spread_2d=1.
+
+Note that vertical_credit_spread_2d has block length 1 legitimately: its entry step (7 days) exceeds its hold (2 days), so its trades share no price path and are genuinely independent. That is a property of the schedule, not an exemption.
+
+---
+
+## cash_secured_put / SPY -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.4699
+- profit_factor: 1.329
+- sharpe: 1.33
+- mean_return_pct: 0.00137
+- total_pnl_dollars: 5204.51
+- max_drawdown_dollars: -4025.89
+- exit_reason_breakdown: {'stop_loss': 44, 'expiration': 39}
+- mean-return 95% bootstrap CI: (-0.00098, 0.00393)
+- sharpe 95% bootstrap CI: (-1.076, 3.504)
+- rejection reasons: mean-return 95% bootstrap CI (-0.00098, 0.00393) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-1.076, 3.504) does not exclude zero (lower bound must be > 0)
+
+## covered_call / SPY -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.3976
+- profit_factor: 1.565
+- sharpe: 1.878
+- mean_return_pct: 0.00525
+- total_pnl_dollars: 23202.53
+- max_drawdown_dollars: -10992.25
+- exit_reason_breakdown: {'stop_loss': 49, 'expiration': 34}
+- mean-return 95% bootstrap CI: (-0.00054, 0.01178)
+- sharpe 95% bootstrap CI: (-0.235, 3.887)
+- rejection reasons: mean-return 95% bootstrap CI (-0.00054, 0.01178) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-0.235, 3.887) does not exclude zero (lower bound must be > 0)
+
+## long_directional / SPY -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.1566
+- profit_factor: 0.528
+- sharpe: -2.008
+- mean_return_pct: -0.25576
+- total_pnl_dollars: -14799.23
+- max_drawdown_dollars: -18718.84
+- exit_reason_breakdown: {'stop_loss': 68, 'expiration': 15}
+- mean-return 95% bootstrap CI: (-0.53192, 0.05521)
+- sharpe 95% bootstrap CI: (-7.177, 0.363)
+- rejection reasons: mean-return 95% bootstrap CI (-0.53192, 0.05521) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-7.177, 0.363) does not exclude zero (lower bound must be > 0)
+
+## vertical_credit_spread / SPY -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.4458
+- profit_factor: 1.052
+- sharpe: -0.89
+- mean_return_pct: -0.03284
+- total_pnl_dollars: 541.99
+- max_drawdown_dollars: -2847.21
+- exit_reason_breakdown: {'stop_loss': 46, 'expiration': 37}
+- mean-return 95% bootstrap CI: (-0.10719, 0.04486)
+- sharpe 95% bootstrap CI: (-2.757, 1.354)
+- rejection reasons: mean-return 95% bootstrap CI (-0.10719, 0.04486) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-2.757, 1.354) does not exclude zero (lower bound must be > 0)
+
+## iron_condor / SPY -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.4096
+- profit_factor: 1.754
+- sharpe: 1.099
+- mean_return_pct: 0.03017
+- total_pnl_dollars: 3961.4
+- max_drawdown_dollars: -2320.88
+- exit_reason_breakdown: {'stop_loss': 49, 'expiration': 34}
+- mean-return 95% bootstrap CI: (-0.03392, 0.09307)
+- sharpe 95% bootstrap CI: (-1.112, 3.99)
+- rejection reasons: mean-return 95% bootstrap CI (-0.03392, 0.09307) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-1.112, 3.99) does not exclude zero (lower bound must be > 0)
+
+## iron_condor_vrp_45_21 / SPY -- FAIL (2026-09-01)
+
+- trades: 76
+- win_rate: 0.5921
+- profit_factor: 0.635
+- sharpe: -2.191
+- mean_return_pct: -0.07225
+- total_pnl_dollars: -3640.3
+- max_drawdown_dollars: -4794.01
+- exit_reason_breakdown: {'time_exit': 66, 'stop_loss': 10}
+- mean-return 95% bootstrap CI: (-0.18116, 0.02919)
+- sharpe 95% bootstrap CI: (-4.831, 1.368)
+- rejection reasons: mean-return 95% bootstrap CI (-0.18116, 0.02919) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-4.831, 1.368) does not exclude zero (lower bound must be > 0)
+
+## vertical_credit_spread_2d / SPY -- FAIL (2026-09-01)
+
+- trades: 85
+- win_rate: 0.7765
+- profit_factor: 1.929
+- sharpe: 1.665
+- mean_return_pct: 0.07493
+- total_pnl_dollars: 2941.79
+- max_drawdown_dollars: -469.88
+- exit_reason_breakdown: {'expiration': 73, 'stop_loss': 12}
+- mean-return 95% bootstrap CI: (-0.01642, 0.15767)
+- sharpe 95% bootstrap CI: (-0.323, 4.399)
+- rejection reasons: mean-return 95% bootstrap CI (-0.01642, 0.15767) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-0.323, 4.399) does not exclude zero (lower bound must be > 0)
+
+## cash_secured_put / QQQ -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.5181
+- profit_factor: 1.423
+- sharpe: 1.596
+- mean_return_pct: 0.00209
+- total_pnl_dollars: 7387.05
+- max_drawdown_dollars: -4225.21
+- exit_reason_breakdown: {'stop_loss': 40, 'expiration': 43}
+- mean-return 95% bootstrap CI: (-0.0007, 0.00521)
+- sharpe 95% bootstrap CI: (-0.566, 3.935)
+- rejection reasons: mean-return 95% bootstrap CI (-0.0007, 0.00521) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-0.566, 3.935) does not exclude zero (lower bound must be > 0)
+
+## covered_call / QQQ -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.4819
+- profit_factor: 1.699
+- sharpe: 2.293
+- mean_return_pct: 0.00943
+- total_pnl_dollars: 35542.24
+- max_drawdown_dollars: -13241.52
+- exit_reason_breakdown: {'stop_loss': 42, 'expiration': 41}
+- mean-return 95% bootstrap CI: (-0.00028, 0.02025)
+- sharpe 95% bootstrap CI: (-0.077, 4.433)
+- rejection reasons: mean-return 95% bootstrap CI (-0.00028, 0.02025) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-0.077, 4.433) does not exclude zero (lower bound must be > 0)
+
+## long_directional / QQQ -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.2289
+- profit_factor: 1.012
+- sharpe: 0.456
+- mean_return_pct: 0.09439
+- total_pnl_dollars: 530.86
+- max_drawdown_dollars: -12420.55
+- exit_reason_breakdown: {'stop_loss': 55, 'expiration': 28}
+- mean-return 95% bootstrap CI: (-0.35738, 0.64084)
+- sharpe 95% bootstrap CI: (-2.487, 2.516)
+- rejection reasons: mean-return 95% bootstrap CI (-0.35738, 0.64084) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-2.487, 2.516) does not exclude zero (lower bound must be > 0)
+
+## vertical_credit_spread / QQQ -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.494
+- profit_factor: 1.112
+- sharpe: 0.056
+- mean_return_pct: 0.00205
+- total_pnl_dollars: 1398.78
+- max_drawdown_dollars: -3407.53
+- exit_reason_breakdown: {'stop_loss': 42, 'expiration': 41}
+- mean-return 95% bootstrap CI: (-0.07897, 0.08605)
+- sharpe 95% bootstrap CI: (-2.119, 2.536)
+- rejection reasons: mean-return 95% bootstrap CI (-0.07897, 0.08605) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-2.119, 2.536) does not exclude zero (lower bound must be > 0)
+
+## iron_condor / QQQ -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.3133
+- profit_factor: 1.207
+- sharpe: -0.056
+- mean_return_pct: -0.00135
+- total_pnl_dollars: 1400.48
+- max_drawdown_dollars: -2504.55
+- exit_reason_breakdown: {'stop_loss': 57, 'expiration': 26}
+- mean-return 95% bootstrap CI: (-0.05469, 0.05387)
+- sharpe 95% bootstrap CI: (-2.24, 2.467)
+- rejection reasons: mean-return 95% bootstrap CI (-0.05469, 0.05387) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-2.24, 2.467) does not exclude zero (lower bound must be > 0)
+
+## iron_condor_vrp_45_21 / QQQ -- FAIL (2026-09-01)
+
+- trades: 76
+- win_rate: 0.5921
+- profit_factor: 0.521
+- sharpe: -2.65
+- mean_return_pct: -0.09088
+- total_pnl_dollars: -6676.37
+- max_drawdown_dollars: -8083.47
+- exit_reason_breakdown: {'time_exit': 63, 'stop_loss': 13}
+- mean-return 95% bootstrap CI: (-0.20134, 0.01382)
+- sharpe 95% bootstrap CI: (-5.313, 0.546)
+- rejection reasons: mean-return 95% bootstrap CI (-0.20134, 0.01382) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-5.313, 0.546) does not exclude zero (lower bound must be > 0)
+
+## vertical_credit_spread_2d / QQQ -- FAIL (2026-09-01)
+
+- trades: 85
+- win_rate: 0.8118
+- profit_factor: 1.818
+- sharpe: 1.812
+- mean_return_pct: 0.08423
+- total_pnl_dollars: 3449.94
+- max_drawdown_dollars: -616.64
+- exit_reason_breakdown: {'stop_loss': 9, 'expiration': 76}
+- mean-return 95% bootstrap CI: (-0.00894, 0.17246)
+- sharpe 95% bootstrap CI: (-0.166, 4.719)
+- rejection reasons: mean-return 95% bootstrap CI (-0.00894, 0.17246) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-0.166, 4.719) does not exclude zero (lower bound must be > 0)
+
+## cash_secured_put / IWM -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.506
+- profit_factor: 1.566
+- sharpe: 1.901
+- mean_return_pct: 0.00251
+- total_pnl_dollars: 4226.74
+- max_drawdown_dollars: -3338.42
+- exit_reason_breakdown: {'expiration': 42, 'stop_loss': 41}
+- mean-return 95% bootstrap CI: (-0.00059, 0.00583)
+- sharpe 95% bootstrap CI: (-0.43, 4.703)
+- rejection reasons: mean-return 95% bootstrap CI (-0.00059, 0.00583) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-0.43, 4.703) does not exclude zero (lower bound must be > 0)
+
+## covered_call / IWM -- PASS (2026-09-01)
+
+- trades: 83
+- win_rate: 0.4699
+- profit_factor: 1.882
+- sharpe: 2.667
+- mean_return_pct: 0.01009
+- total_pnl_dollars: 17331.47
+- max_drawdown_dollars: -6851.07
+- exit_reason_breakdown: {'expiration': 39, 'stop_loss': 44}
+- mean-return 95% bootstrap CI: (0.00138, 0.01954)
+- sharpe 95% bootstrap CI: (0.426, 4.945)
+
+## covered_call (extended history) / IWM -- PASS (2026-09-01)
+
+- trades: 211
+- win_rate: 0.4408
+- profit_factor: 1.617
+- sharpe: 3.337
+- mean_return_pct: 0.00801
+- total_pnl_dollars: 31034.0
+- max_drawdown_dollars: -6851.07
+- exit_reason_breakdown: {'stop_loss': 117, 'expiration': 94}
+- mean-return 95% bootstrap CI: (0.00217, 0.01422)
+- sharpe 95% bootstrap CI: (0.974, 5.649)
+
+## covered_call (sub-period stability) / IWM -- FAIL (2026-09-01)
+
+- trades: 105
+- win_rate: 0.4
+- profit_factor: 1.367
+- sharpe: 1.706
+- mean_return_pct: 0.0059
+- total_pnl_dollars: 9616.96
+- max_drawdown_dollars: -5380.94
+- exit_reason_breakdown: {'stop_loss': 63, 'expiration': 42}
+- mean-return 95% bootstrap CI: (-0.00242, 0.01452)
+- sharpe 95% bootstrap CI: (-0.797, 3.927)
+- rejection reasons: mean-return 95% bootstrap CI (-0.00242, 0.01452) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-0.797, 3.927) does not exclude zero (lower bound must be > 0)
+- notes: second half: passed=True, sharpe=3.045
+
+## long_directional / IWM -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.0964
+- profit_factor: 0.462
+- sharpe: -2.062
+- mean_return_pct: -0.29561
+- total_pnl_dollars: -10262.03
+- max_drawdown_dollars: -10262.03
+- exit_reason_breakdown: {'stop_loss': 72, 'expiration': 11}
+- mean-return 95% bootstrap CI: (-0.54301, -0.00143)
+- sharpe 95% bootstrap CI: (-7.074, -0.008)
+- rejection reasons: mean-return 95% bootstrap CI (-0.54301, -0.00143) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-7.074, -0.008) does not exclude zero (lower bound must be > 0)
+
+## vertical_credit_spread / IWM -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.494
+- profit_factor: 1.349
+- sharpe: 0.615
+- mean_return_pct: 0.0208
+- total_pnl_dollars: 1744.85
+- max_drawdown_dollars: -1787.2
+- exit_reason_breakdown: {'expiration': 41, 'stop_loss': 42}
+- mean-return 95% bootstrap CI: (-0.05935, 0.09853)
+- sharpe 95% bootstrap CI: (-1.706, 3.24)
+- rejection reasons: mean-return 95% bootstrap CI (-0.05935, 0.09853) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-1.706, 3.24) does not exclude zero (lower bound must be > 0)
+
+## iron_condor / IWM -- FAIL (2026-09-01)
+
+- trades: 83
+- win_rate: 0.3735
+- profit_factor: 1.419
+- sharpe: 0.236
+- mean_return_pct: 0.00619
+- total_pnl_dollars: 1320.24
+- max_drawdown_dollars: -1222.76
+- exit_reason_breakdown: {'stop_loss': 52, 'expiration': 31}
+- mean-return 95% bootstrap CI: (-0.05773, 0.0691)
+- sharpe 95% bootstrap CI: (-2.076, 2.932)
+- rejection reasons: mean-return 95% bootstrap CI (-0.05773, 0.0691) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-2.076, 2.932) does not exclude zero (lower bound must be > 0)
+
+## iron_condor_vrp_45_21 / IWM -- FAIL (2026-09-01)
+
+- trades: 76
+- win_rate: 0.5921
+- profit_factor: 0.551
+- sharpe: -2.541
+- mean_return_pct: -0.08527
+- total_pnl_dollars: -2647.73
+- max_drawdown_dollars: -3147.45
+- exit_reason_breakdown: {'time_exit': 64, 'stop_loss': 12}
+- mean-return 95% bootstrap CI: (-0.19122, 0.01149)
+- sharpe 95% bootstrap CI: (-4.911, 0.485)
+- rejection reasons: mean-return 95% bootstrap CI (-0.19122, 0.01149) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-4.911, 0.485) does not exclude zero (lower bound must be > 0)
+
+## vertical_credit_spread_2d / IWM -- FAIL (2026-09-01)
+
+- trades: 85
+- win_rate: 0.7647
+- profit_factor: 1.796
+- sharpe: 1.665
+- mean_return_pct: 0.07326
+- total_pnl_dollars: 1415.28
+- max_drawdown_dollars: -237.07
+- exit_reason_breakdown: {'expiration': 74, 'stop_loss': 11}
+- mean-return 95% bootstrap CI: (-0.01312, 0.15925)
+- sharpe 95% bootstrap CI: (-0.263, 4.566)
+- rejection reasons: mean-return 95% bootstrap CI (-0.01312, 0.15925) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-0.263, 4.566) does not exclude zero (lower bound must be > 0)
+

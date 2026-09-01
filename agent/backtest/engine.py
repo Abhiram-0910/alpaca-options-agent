@@ -10,6 +10,7 @@ survives on a short window is exactly the overfitting pattern this gate
 exists to catch.
 """
 import json
+import math
 import os
 from datetime import datetime, timedelta
 
@@ -27,7 +28,7 @@ from agent.backtest.atr import Bar, derive_risk_parameters
 from agent.backtest.costs import DEFAULT_COST_MODEL
 from agent.backtest.simulator import simulate_trade
 from agent.backtest.metrics import validate_strategy_result, validate_sub_period_stability
-from agent.backtest.graveyard import record_result
+from agent.backtest.graveyard import record_result, record_note
 
 HOLD_DAYS = 21          # ~30 calendar days, one monthly options cycle, in trading days
 STEP_DAYS = 7           # slide the window forward this many trading days between simulated trades
@@ -42,7 +43,7 @@ RISK_PCT_PER_TRADE = 0.02
 
 STRATEGY_NAMES = (
     "cash_secured_put", "covered_call", "long_directional", "vertical_credit_spread", "iron_condor",
-    "iron_condor_vrp_45_21",
+    "iron_condor_vrp_45_21", "vertical_credit_spread_2d",
 )
 
 # Per-strategy entry/exit timing. hold_days/t_years default to the module-level HOLD_DAYS/T_YEARS
@@ -59,9 +60,29 @@ STRATEGY_NAMES = (
 # the default 20 days used elsewhere) so the vol input has a fighting chance of covering what
 # actually materializes over the life of the trade, rather than a stale 20-day snapshot going
 # stale partway through a 45-day hold.
+# `vertical_credit_spread_2d` is the structure this run actually intends to trade: a
+# defined-risk bull put spread entered 2-3 days from expiry, which is the only horizon that
+# both closes inside the judged window and matches the 1-4 DTE contracts the chain offers.
+# Every other profile here validates a hold the live agent cannot perform before the
+# deadline, which makes their numbers evidence about methodology rather than about this week.
+#
+# Its step_days (7) exceeds its hold_days (2), so consecutive trades share no part of any
+# price path and the trade sample really is independent -- the overlap that forced the
+# moving-block bootstrap elsewhere is absent here by construction, not by correction, so
+# block_size stays 1 and the CI needs no widening. That is a property of the schedule, and
+# worth keeping if the profile is ever retuned.
+#
+# It uses the credit-multiple stop rather than the ATR underlying-distance stop for the same
+# reason iron_condor_vrp_45_21 does, but more acutely: 1.5x ATR on a broad-market ETF is a
+# ~2% move, which a 2-day hold essentially never reaches, so the ATR stop would be inert
+# rather than protective and it would be dishonest to describe the position as stopped.
 STRATEGY_TIMING = {
+    "vertical_credit_spread_2d": {
+        "hold_days": 2, "t_years": 3 / 365, "step_days": 7, "force_exit_offset": None,
+        "use_underlying_stop": False, "stop_loss_credit_multiple": 2.0, "vol_window": 20,
+    },
     "iron_condor_vrp_45_21": {
-        "hold_days": 45, "t_years": 45 / 365, "force_exit_offset": 45 - 21,
+        "hold_days": 45, "t_years": 45 / 365, "step_days": STEP_DAYS, "force_exit_offset": 45 - 21,
         "use_underlying_stop": False, "stop_loss_credit_multiple": 2.0, "vol_window": 45,
     },
 }
@@ -69,9 +90,19 @@ STRATEGY_TIMING = {
 
 def _timing_for(strategy_name: str) -> dict:
     return STRATEGY_TIMING.get(strategy_name, {
-        "hold_days": HOLD_DAYS, "t_years": T_YEARS, "force_exit_offset": None,
+        "hold_days": HOLD_DAYS, "t_years": T_YEARS, "step_days": STEP_DAYS, "force_exit_offset": None,
         "use_underlying_stop": True, "stop_loss_credit_multiple": None, "vol_window": 20,
     })
+
+
+def _block_size_for(strategy_name: str) -> int:
+    """Bootstrap block length: how many consecutive trades share a holding window.
+
+    hold/step rounded up. When the entry step is at least as long as the hold there is no
+    overlap and this is 1, which is the plain i.i.d. bootstrap.
+    """
+    timing = _timing_for(strategy_name)
+    return max(1, math.ceil(timing["hold_days"] / timing["step_days"]))
 
 
 def _build_registry() -> StrategyRegistry:
@@ -118,7 +149,7 @@ def _build_legs(strategy_name: str, S0: float, sigma: float, momentum: float, t_
     if strategy_name == "long_directional":
         plan = long_directional(S0, t_years, sigma, momentum)
         return plan.legs, plan.net_credit, plan.max_loss_per_contract
-    if strategy_name == "vertical_credit_spread":
+    if strategy_name in ("vertical_credit_spread", "vertical_credit_spread_2d"):
         plan = vertical_credit_spread(S0, t_years, sigma)
         return plan.legs, plan.net_credit, plan.max_loss_per_contract
     if strategy_name in ("iron_condor", "iron_condor_vrp_45_21"):
@@ -131,7 +162,7 @@ def simulate_strategy(strategy_name: str, closes: list, symbol: str, stop_loss_u
                        cost_model=DEFAULT_COST_MODEL) -> list:
     timing = _timing_for(strategy_name)
     hold_days, t_years, force_exit_offset = timing["hold_days"], timing["t_years"], timing["force_exit_offset"]
-    vol_window = timing["vol_window"]
+    vol_window, step_days = timing["vol_window"], timing["step_days"]
     trades = []
     n = len(closes)
     i = vol_window  # need at least vol_window days of trailing history for the vol estimate
@@ -149,14 +180,15 @@ def simulate_strategy(strategy_name: str, closes: list, symbol: str, stop_loss_u
             force_exit_offset=force_exit_offset,
         )
         trades.append(trade)
-        i += STEP_DAYS
+        i += step_days
 
     return trades
 
 
 def _validate_symbol_strategy(strategy_name: str, closes: list, symbol: str, stop_move: float) -> dict:
     trades = simulate_strategy(strategy_name, closes, symbol, stop_move)
-    validation = validate_strategy_result(trades, min_trades=MIN_TRADES)
+    validation = validate_strategy_result(trades, min_trades=MIN_TRADES,
+                                          block_size=_block_size_for(strategy_name))
     return {"validation": validation, "trades": len(trades), "trade_list": trades}
 
 
@@ -164,6 +196,20 @@ def run_backtest(symbols=None) -> dict:
     symbols = symbols or list(CONFIG.watchlist)
     client = StockHistoricalDataClient(CONFIG.alpaca_api_key, CONFIG.alpaca_secret_key)
     report = {}
+
+    record_note(
+        "Bootstrap changed from i.i.d. resampling to a circular moving-block bootstrap, block "
+        "length ceil(hold_days / step_days) per strategy. Measured on a zero-edge random walk, "
+        "the i.i.d. gate passed 10.8% of samples against a 2.5% nominal rate; the block gate "
+        "passes 2.5% (test_block_bootstrap.py).\n\n"
+        "**Every entry above this line was computed with the i.i.d. bootstrap and is superseded.** "
+        "They are kept because a superseded result is still a record of what was tried, but no "
+        "PASS above this line may be quoted as validated.\n\n"
+        f"Block length this run: {', '.join(f'{n}={_block_size_for(n)}' for n in STRATEGY_NAMES)}.\n\n"
+        "Note that vertical_credit_spread_2d has block length 1 legitimately: its entry step (7 "
+        "days) exceeds its hold (2 days), so its trades share no price path and are genuinely "
+        "independent. That is a property of the schedule, not an exemption."
+    )
 
     for symbol in symbols:
         try:
@@ -222,7 +268,9 @@ def run_backtest(symbols=None) -> dict:
                             # validation — a combined-sample pass that's actually carried by one
                             # half of history is exactly the instability stress testing found in
                             # AMD long_directional (first half alone: Sharpe 0.99, doesn't clear).
-                            sub_period = validate_sub_period_stability(ext_result["trade_list"], min_trades_per_half=15)
+                            sub_period = validate_sub_period_stability(
+                                ext_result["trade_list"], min_trades_per_half=15,
+                                block_size=_block_size_for(strategy_name))
                             record_result(f"{strategy_name} (sub-period stability)", symbol, sub_period.first_half,
                                           extra_notes=f"second half: passed={sub_period.second_half.passed}, "
                                                       f"sharpe={sub_period.second_half.metrics.get('sharpe')}")
