@@ -21,14 +21,17 @@ from agent.backtest_evidence import load_backtest_summary
 from agent.reflection import summarize_for_prompt
 from agent.mcp_parsers import parse_order_error
 
+# Formatted at import, not inside _build_system_prompt: multi_agent.py interpolates this
+# constant into its own f-strings, where any {placeholder} left in it would survive as
+# literal braces in the prompt the model actually reads.
 STRATEGY_UNIVERSE = """\
 You may only use these five options strategy families (never naked/undefined-risk trades):
 
-1. cash_secured_put — sell a cash-secured put (~0.25-0.35 delta), 7-45 DTE. Income/bullish.
+1. cash_secured_put — sell a cash-secured put (~0.25-0.35 delta), {min_dte}-{max_dte} DTE. Income/bullish.
    Requires buying power >= strike * 100 * qty.
 2. covered_call — sell a call against >=100 owned shares of the same underlying (~0.25-0.35 delta).
    Income, caps upside. Only usable if the account already holds >=100 shares of that symbol.
-3. long_directional — buy a call or put (~0.35-0.45 delta), 7-45 DTE, sized only by premium paid.
+3. long_directional — buy a call or put (~0.35-0.45 delta), {min_dte}-{max_dte} DTE, sized only by premium paid.
    Use for a clear directional thesis with defined risk = premium paid.
 4. vertical_credit_spread — sell a closer put and buy a further-OTM put (bull put credit spread),
    defined max loss = spread width minus credit. Submit the two legs as two separate
@@ -46,7 +49,8 @@ at least 30 simulated trades AND a bootstrap confidence interval that excludes z
 for BOTH mean return and Sharpe ratio — and anything that passed was re-tested on a much longer
 history window to catch overfitting to a lucky short window. Only combinations marked PASSED below
 cleared that gate. Full numbers for every combination (pass and fail) are logged to
-docs/strategy_graveyard.md if you want more detail than the summary below."""
+docs/strategy_graveyard.md if you want more detail than the summary below.""".format(
+    min_dte=CONFIG.min_days_to_expiration, max_dte=CONFIG.max_days_to_expiration)
 
 
 def _build_system_prompt(backtest_summary: str, reflection_summary: str = None) -> str:

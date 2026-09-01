@@ -57,8 +57,12 @@ class Config:
     max_allocation_usd_per_trade: float = float(os.getenv("MAX_ALLOCATION_USD_PER_TRADE", "0"))
     max_total_options_allocation_usd: float = float(os.getenv("MAX_TOTAL_OPTIONS_ALLOCATION_USD", "0"))
     daily_loss_limit_pct: float = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "0.05"))
-    min_days_to_expiration: int = int(os.getenv("MIN_DTE", "7"))
-    max_days_to_expiration: int = int(os.getenv("MAX_DTE", "45"))
+    # 1-4 DTE, not the original 7-45. Every expiry that exists inside the judged window
+    # (Wed 2 - Fri 4 Sep 2026) is 1-3 days out, so a 7-day floor rejected every tradeable
+    # contract in the chain. Floor is 1 rather than 0 deliberately: at T=0 Alpaca's Greeks
+    # are null by construction (not a paywall - the maths degenerates) and pin risk is live.
+    min_days_to_expiration: int = int(os.getenv("MIN_DTE", "1"))
+    max_days_to_expiration: int = int(os.getenv("MAX_DTE", "4"))
     max_tool_calls_per_cycle: int = int(os.getenv("MAX_TOOL_CALLS_PER_CYCLE", "25"))
 
     # Hard ceiling on cumulative Anthropic API spend for one `main.py --loop` session
@@ -68,7 +72,11 @@ class Config:
 
     # --- Position/order management (agent/order_manager.py) — universal, strategy-agnostic
     # rules applied to whatever is already open, regardless of which agent opened it. ---
-    force_close_dte: int = int(os.getenv("FORCE_CLOSE_DTE", "2"))            # 0 disables
+    # Disabled: with a 1-4 DTE universe, a 2-day force-close threshold fires on essentially
+    # every position the moment it is opened, closing it for two crossings of the spread and
+    # no P&L. Expiry risk is handled by the dated session window in agent/session_window.py
+    # (flat by Thu 15:45 ET) instead, which is the rule that actually matters here.
+    force_close_dte: int = int(os.getenv("FORCE_CLOSE_DTE", "0"))            # 0 disables
     position_profit_take_pct: float = float(os.getenv("POSITION_PROFIT_TAKE_PCT", "0.50"))  # 0 disables
     position_stop_loss_pct: float = float(os.getenv("POSITION_STOP_LOSS_PCT", "0.75"))       # 0 disables
     stale_order_minutes: int = int(os.getenv("STALE_ORDER_MINUTES", "60"))   # 0 disables

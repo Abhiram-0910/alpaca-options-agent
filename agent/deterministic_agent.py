@@ -14,6 +14,7 @@ anything on the LLM-driven agent in agent/live_agent.py.
 """
 import json
 import os
+from datetime import date
 
 from agent.config import CONFIG, assert_paper_trading
 from agent.mcp.client import AlpacaMCPClient
@@ -27,8 +28,8 @@ from agent.backtest.iron_condor import price_iron_condor
 from agent.mcp_parsers import parse_latest_trade_price, parse_bars_closes, parse_order_error
 from agent.live_chain import fetch_target_expiry_chain
 
-TARGET_DTE = 30
-T_YEARS = 30 / 365
+TARGET_DTE = 2          # aim at the middle of the 1-4 DTE window the judged sessions offer
+PROVISIONAL_T = 3 / 365  # only used to size the strike search band before the real expiry is known
 
 
 def _load_cleared_strategies() -> dict:
@@ -92,17 +93,17 @@ def _legs_properly_ordered(theoretical_legs: list, matched: list) -> bool:
     return True
 
 
-def _build_theoretical_legs(strategy: str, S: float, sigma: float, momentum: float):
+def _build_theoretical_legs(strategy: str, S: float, sigma: float, momentum: float, t_years: float):
     if strategy == "cash_secured_put":
-        return cash_secured_put(S, T_YEARS, sigma).legs
+        return cash_secured_put(S, t_years, sigma).legs
     if strategy == "covered_call":
-        return covered_call(S, T_YEARS, sigma).legs
+        return covered_call(S, t_years, sigma).legs
     if strategy == "long_directional":
-        return long_directional(S, T_YEARS, sigma, momentum).legs
+        return long_directional(S, t_years, sigma, momentum).legs
     if strategy == "vertical_credit_spread":
-        return vertical_credit_spread(S, T_YEARS, sigma).legs
+        return vertical_credit_spread(S, t_years, sigma).legs
     if strategy == "iron_condor":
-        return price_iron_condor(S, T_YEARS, sigma).legs
+        return price_iron_condor(S, t_years, sigma).legs
     raise ValueError(f"unknown strategy {strategy}")
 
 
@@ -165,7 +166,7 @@ async def run_cycle() -> dict:
 
             sigma = realized_vol(closes, window=20)
             momentum = closes[-1] - closes[-10] if len(closes) >= 10 else 0.0
-            theoretical_legs = _build_theoretical_legs(strategy_name, S, sigma, momentum)
+            theoretical_legs = _build_theoretical_legs(strategy_name, S, sigma, momentum, PROVISIONAL_T)
             # covered_call's plan includes a "stock" leg (the covering shares this agent never
             # buys/sells itself -- see agent/strategies/__init__.py) so the *backtest* simulator
             # scores its real P&L. It isn't a real OCC contract to look up on the chain, check
@@ -189,7 +190,16 @@ async def run_cycle() -> dict:
                     f"{strike_lo}-{strike_hi}")
                 continue
 
-            matched = [_match_leg_to_real_chain(leg, same_expiry_chain, S, T_YEARS, sigma)
+            # Rebuild the legs against the expiry the chain actually returned. Strike selection
+            # runs through strike_for_delta, which is extremely sensitive to T: a "30-delta"
+            # put is far OTM at 30 days and nearly at the money at 2. Building legs at a
+            # hardcoded 30/365 and matching them against a 2-DTE chain picks strikes for a
+            # trade we are not placing.
+            t_years = max((target_expiry - date.today()).days, 1) / 365
+            theoretical_legs = _build_theoretical_legs(strategy_name, S, sigma, momentum, t_years)
+            theoretical_legs = [leg for leg in theoretical_legs if leg.option_type != "stock"]
+
+            matched = [_match_leg_to_real_chain(leg, same_expiry_chain, S, t_years, sigma)
                        for leg in theoretical_legs]
             if any(m is None for m in matched):
                 result["skipped"].append(f"{symbol}: chain didn't have a real contract for every leg of "

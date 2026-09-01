@@ -12,6 +12,7 @@ from datetime import date
 from agent.config import CONFIG
 from agent.kill_switch import is_active as kill_switch_active, reason as kill_switch_reason
 from agent.backtest_evidence import load_cleared_symbols
+from agent.session_window import entries_blocked
 
 ORDER_TOOLS = {"place_stock_order", "place_option_order", "place_crypto_order"}
 _OCC_RE = re.compile(r"^([A-Z]{1,6})(\d{6})([CP])(\d{8})$")
@@ -137,6 +138,14 @@ class RiskGate:
 
         if self.equity <= 0:
             return self._reject("Risk gate has no account snapshot yet; refusing to trade blind.")
+
+        # Dated NFP window rule (agent/session_window.py). Sits here rather than in one agent
+        # path so all three -- deterministic, single-agent, multi-agent -- inherit it, and so
+        # the refusal is recorded as a decision in the rejection list rather than showing up
+        # as an empty book.
+        blocked = entries_blocked()
+        if blocked:
+            return self._reject(f"No new positions: {blocked}.")
 
         # Circuit breaker: stop opening new risk once the daily loss limit is breached.
         daily_pnl_pct = (self.equity - self.day_start_equity) / self.day_start_equity if self.day_start_equity else 0

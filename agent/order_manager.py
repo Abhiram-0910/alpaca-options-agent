@@ -31,6 +31,7 @@ from agent.trade_log import log_event
 from agent.reflection import record_closed_position
 from agent.alerts import alert
 from agent.mcp_parsers import parse_order_error
+from agent.session_window import must_be_flat
 
 
 def _unwrap_result_list(raw: str, context: str) -> list:
@@ -50,6 +51,16 @@ def _unwrap_result_list(raw: str, context: str) -> list:
         return []
     result = data.get("data", {}).get("result", [])
     return result if isinstance(result, list) else []
+
+
+def _order_symbols(order: dict) -> set:
+    """Every OCC symbol an order touches. A single-leg order carries its symbol at the top
+    level; an mleg parent carries "" there and the real symbols on order["legs"]."""
+    symbols = {order.get("symbol")} if order.get("symbol") else set()
+    for leg in order.get("legs") or []:
+        if isinstance(leg, dict) and leg.get("symbol"):
+            symbols.add(leg["symbol"])
+    return symbols
 
 
 def _close_order_args(symbol: str, side: str, qty: float, current_price: float) -> dict:
@@ -89,7 +100,16 @@ async def _manage_positions(mcp) -> list:
     open_orders = _unwrap_result_list(open_orders_raw, context="manage_positions.get_orders")
     # Guard each element, not just the container: a non-dict entry in open_orders would raise
     # AttributeError on .get() and abort this whole cycle's position management uncaught.
-    symbols_with_open_orders = {o.get("symbol") for o in open_orders if isinstance(o, dict)}
+    symbols_with_open_orders = set()
+    for o in open_orders:
+        if not isinstance(o, dict):
+            continue
+        # An mleg parent order comes back with symbol "" and side "" -- the real OCC symbols
+        # live on its legs (verified against the judged account, probe_mleg.py). Reading only
+        # the top level put "" in this set, which matches no position, so the guard below
+        # stopped working and every cycle piled another close order onto a spread that had
+        # not filled yet.
+        symbols_with_open_orders.update(_order_symbols(o))
 
     closed = []
     for pos in positions:
@@ -118,7 +138,15 @@ async def _manage_positions(mcp) -> list:
         current_price = float(pos.get("current_price", 0) or 0)
 
         reason = None
-        if CONFIG.force_close_dte > 0 and dte <= CONFIG.force_close_dte:
+        # The dated NFP flat rule outranks every other exit: it is a decision about a
+        # scheduled event, not a reaction to this position's P&L. Logged with its own event
+        # type so the demo and write-up can point at the agent choosing to stand down rather
+        # than at an account that merely happens to be empty.
+        flat_reason = must_be_flat()
+        if flat_reason:
+            reason = f"session window: {flat_reason}"
+            log_event("nfp_flat_rule", symbol=symbol, dte=dte, plpc=plpc, reason=flat_reason)
+        elif CONFIG.force_close_dte > 0 and dte <= CONFIG.force_close_dte:
             reason = f"within {CONFIG.force_close_dte} DTE of expiration (dte={dte})"
         elif CONFIG.position_stop_loss_pct > 0 and plpc <= -CONFIG.position_stop_loss_pct:
             reason = f"stop-loss: unrealized {plpc:.0%} <= -{CONFIG.position_stop_loss_pct:.0%}"
@@ -187,12 +215,13 @@ async def _cancel_stale_orders(mcp) -> list:
         # actually canceled anything.
         cancel_error = parse_order_error(result_text)
         event = "order_cancel_rejected" if cancel_error else "order_canceled_stale"
-        log_event(event, order_id=order_id, symbol=order.get("symbol"),
+        order_symbols = sorted(_order_symbols(order))
+        log_event(event, order_id=order_id, symbol=order_symbols,
                    age_minutes=round(age_minutes, 1), result=result_text[:500], error=cancel_error)
         if cancel_error:
-            alert("order_cancel_rejected", order_id=order_id, symbol=order.get("symbol"), error=cancel_error)
+            alert("order_cancel_rejected", order_id=order_id, symbol=order_symbols, error=cancel_error)
             continue  # not actually canceled -- still open, and still ties up qty_available
-        canceled.append({"order_id": order_id, "symbol": order.get("symbol"), "age_minutes": round(age_minutes, 1)})
+        canceled.append({"order_id": order_id, "symbol": order_symbols, "age_minutes": round(age_minutes, 1)})
 
     return canceled
 
