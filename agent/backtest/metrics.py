@@ -79,14 +79,39 @@ def _sharpe_of(sample: list) -> float:
     return (mean / stdev) * math.sqrt(len(sample))
 
 
-def _bootstrap(values: list, stat_fn, n_boot: int, ci: float, seed: int) -> tuple:
+def _bootstrap(values: list, stat_fn, n_boot: int, ci: float, seed: int, block_size: int = 1) -> tuple:
+    """Percentile bootstrap. `block_size` > 1 selects a *circular moving-block* bootstrap.
+
+    The i.i.d. resample below is only valid if the trades are independent draws, and in this
+    engine they are not: a strategy held for `hold_days` and re-entered every `step_days`
+    produces consecutive trades whose windows overlap and which therefore share the same
+    stretch of one price path. Resampling those as independent understates the variance and
+    inflates the pass rate -- measured at roughly 14% against a 2.5% nominal on a zero-edge
+    synthetic (see test_block_bootstrap.py).
+
+    Blocks are drawn circularly (wrapping past the end) rather than from starts in
+    [0, n-L]: with linear blocks the first and last few observations appear in fewer blocks
+    than the middle ones, which biases the resample toward the centre of the sample.
+
+    block_size=1 reproduces the original i.i.d. path exactly, including the RNG call
+    sequence, so previously recorded numbers remain reproducible.
+    """
     if len(values) < 2:
         return (float("nan"), float("nan"))
     rng = random.Random(seed)
     n = len(values)
+    length = max(1, min(int(block_size), n))
+    n_blocks = math.ceil(n / length)
     boot_stats = []
     for _ in range(n_boot):
-        sample = [values[rng.randrange(n)] for _ in range(n)]
+        if length == 1:
+            sample = [values[rng.randrange(n)] for _ in range(n)]
+        else:
+            sample = []
+            for _ in range(n_blocks):
+                start = rng.randrange(n)
+                sample.extend(values[(start + k) % n] for k in range(length))
+            del sample[n:]
         boot_stats.append(stat_fn(sample))
     boot_stats.sort()
     alpha = (1 - ci) / 2
@@ -95,14 +120,16 @@ def _bootstrap(values: list, stat_fn, n_boot: int, ci: float, seed: int) -> tupl
     return (boot_stats[lo_idx], boot_stats[hi_idx])
 
 
-def bootstrap_confidence_interval(values: list, n_boot: int = 2000, ci: float = 0.95, seed: int = 42) -> tuple:
+def bootstrap_confidence_interval(values: list, n_boot: int = 2000, ci: float = 0.95, seed: int = 42,
+                                   block_size: int = 1) -> tuple:
     """Percentile-bootstrap CI on the mean of `values`."""
-    return _bootstrap(values, statistics.mean, n_boot, ci, seed)
+    return _bootstrap(values, statistics.mean, n_boot, ci, seed, block_size)
 
 
-def bootstrap_sharpe_ci(values: list, n_boot: int = 2000, ci: float = 0.95, seed: int = 42) -> tuple:
+def bootstrap_sharpe_ci(values: list, n_boot: int = 2000, ci: float = 0.95, seed: int = 42,
+                         block_size: int = 1) -> tuple:
     """Percentile-bootstrap CI on the Sharpe ratio of `values`."""
-    return _bootstrap(values, _sharpe_of, n_boot, ci, seed)
+    return _bootstrap(values, _sharpe_of, n_boot, ci, seed, block_size)
 
 
 @dataclass
@@ -115,7 +142,7 @@ class ValidationResult:
 
 
 def validate_strategy_result(trades: list, min_trades: int = 30, ci: float = 0.95,
-                              n_boot: int = 2000, seed: int = 42) -> ValidationResult:
+                              n_boot: int = 2000, seed: int = 42, block_size: int = 1) -> ValidationResult:
     """The pass/fail gate. There is no partial credit: a strategy PASSes only if
 
       1. it has at least `min_trades` trades (guards against small-sample false positives), and
@@ -134,8 +161,9 @@ def validate_strategy_result(trades: list, min_trades: int = 30, ci: float = 0.9
 
     returns = [t.net_return_pct for t in trades]
     if len(returns) >= 2:
-        mean_ci = bootstrap_confidence_interval(returns, n_boot=n_boot, ci=ci, seed=seed)
-        sharpe_ci = bootstrap_sharpe_ci(returns, n_boot=n_boot, ci=ci, seed=seed)
+        mean_ci = bootstrap_confidence_interval(returns, n_boot=n_boot, ci=ci, seed=seed,
+                                                block_size=block_size)
+        sharpe_ci = bootstrap_sharpe_ci(returns, n_boot=n_boot, ci=ci, seed=seed, block_size=block_size)
     else:
         mean_ci = (float("nan"), float("nan"))
         sharpe_ci = (float("nan"), float("nan"))
@@ -158,7 +186,8 @@ class SubPeriodResult:
     reasons: list
 
 
-def validate_sub_period_stability(trades: list, min_trades_per_half: int = 15, ci: float = 0.95) -> SubPeriodResult:
+def validate_sub_period_stability(trades: list, min_trades_per_half: int = 15, ci: float = 0.95,
+                                   block_size: int = 1) -> SubPeriodResult:
     """Splits `trades` chronologically in half and requires BOTH halves to individually
     clear validate_strategy_result — not just the combined sample. Catches a strategy
     whose combined-sample pass is actually carried by one half of history while the other
@@ -168,8 +197,10 @@ def validate_sub_period_stability(trades: list, min_trades_per_half: int = 15, c
     credit here either: either both halves pass, or the whole thing fails.
     """
     mid = len(trades) // 2
-    first_half = validate_strategy_result(trades[:mid], min_trades=min_trades_per_half, ci=ci)
-    second_half = validate_strategy_result(trades[mid:], min_trades=min_trades_per_half, ci=ci)
+    first_half = validate_strategy_result(trades[:mid], min_trades=min_trades_per_half, ci=ci,
+                                          block_size=block_size)
+    second_half = validate_strategy_result(trades[mid:], min_trades=min_trades_per_half, ci=ci,
+                                           block_size=block_size)
     reasons = []
     if not first_half.passed:
         reasons.append(f"first half of history fails validation on its own: {'; '.join(first_half.reasons)}")
