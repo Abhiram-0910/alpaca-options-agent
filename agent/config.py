@@ -81,6 +81,11 @@ class Config:
     position_stop_loss_pct: float = float(os.getenv("POSITION_STOP_LOSS_PCT", "0.75"))       # 0 disables
     stale_order_minutes: int = int(os.getenv("STALE_ORDER_MINUTES", "60"))   # 0 disables
 
+    # One bounded, explicitly unvalidated trade so the execution path can be demonstrated
+    # while zero strategies have cleared validation. See agent/demonstration.py -- every
+    # constraint it adds is tighter than the normal path and none of them is tunable here.
+    demonstration_mode: bool = _bool("DEMONSTRATION_MODE", False)
+
     logs_dir: str = os.getenv("LOGS_DIR", "logs")
 
 

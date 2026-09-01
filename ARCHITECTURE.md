@@ -47,6 +47,32 @@ deterministic policy maps it to a concrete trade → RiskGate → MCP order → 
   assignment, ex-dividend assignment on short calls, and pin risk in one decision.
   **Rejected:** American-style single-name shorts held near expiry.
 - **Defined risk only.** No undefined-risk shorts, ever.
+- **Demonstration mode, after the gate refused everything.** As of 1 Sep 2026 the validation
+  gate has cleared nothing: three liquid ETFs, seven structures, 21 documented FAILs. The
+  closest candidate (`vertical_credit_spread_2d`, 76-81% win rate, Sharpe 1.67-1.81) was
+  refused because its Sharpe CI lower bound stays negative — correct behaviour on a
+  negatively skewed payoff, and the reason a high win rate is a shape parameter rather than
+  evidence.
+
+  The gate governs whether we may **claim** an edge. It does not govern whether an order is
+  **safe**. A defined-risk vertical spread's worst case is bounded and known before entry —
+  that is why defined risk was the requirement in the first place — so "no evidence of edge"
+  and "this order could hurt the account" are different statements, and only the first is
+  true here. We therefore execute exactly one bounded demonstration of the full path — chain
+  read, strike selection in deterministic Python, risk gate, MCP multi-leg order, managed
+  exit — while reporting plainly that zero strategies cleared validation.
+
+  Every constraint demonstration mode adds is tighter than the normal path and none is
+  env-tunable: defined-risk multi-leg only, 1 contract, 1 open position, max loss ≤ 0.5% of
+  NAV, SPY only. Every other gate stays armed — DTE window, kill switch, daily loss limit,
+  the Thursday 15:45 flat rule, order-result checking. It refuses to arm at all if anything
+  has cleared validation, so a demonstration trade can never sit alongside a validated one.
+  Every order, log line and trade-log entry it produces is stamped
+  `validation_status="UNVALIDATED_DEMONSTRATION"`.
+
+  **Rejected:** relaxing the gate's criteria after seeing that everything failed. That is the
+  exact post-hoc move the gate exists to prevent, and a reviewer would be right to discount
+  every other number in this repo on the strength of it.
 
 ## Variance — read before writing any performance claim
 
