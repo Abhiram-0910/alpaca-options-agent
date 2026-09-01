@@ -24,6 +24,25 @@ def load_cleared_symbols() -> set:
     return {sym for sym, data in backtest_report.items() if data.get("cleared_for_paper")}
 
 
+def load_cleared_strategies(symbol: str) -> set:
+    """Strategy names that specifically passed the validation gate for this one symbol --
+    finer-grained than load_cleared_symbols(), which only says the symbol has *some* cleared
+    strategy. RiskGate.check() can't enforce this by itself: a bare place_option_order call
+    (symbol/side/qty/price) carries no strategy label, so its hard gate is necessarily
+    symbol-level. A caller that DOES know which strategy it's about to execute -- e.g.
+    multi_agent.py's proposal["strategy"] -- should cross-check against this directly rather
+    than relying on the symbol-level gate alone, or a symbol with one cleared strategy (say
+    GOOGL/cash_secured_put) would silently let a completely different, never-validated strategy
+    (e.g. GOOGL/iron_condor) through too."""
+    backtest_path = os.path.join(CONFIG.logs_dir, "backtest_report.json")
+    if not os.path.exists(backtest_path):
+        return set()
+    with open(backtest_path) as f:
+        backtest_report = json.load(f)
+    data = backtest_report.get(symbol) or {}
+    return set(data.get("cleared_for_paper") or [])
+
+
 def load_backtest_summary() -> str:
     backtest_path = os.path.join(CONFIG.logs_dir, "backtest_report.json")
     if os.path.exists(backtest_path):

@@ -24,7 +24,7 @@ from agent.alerts import alert
 from agent.options_pricing import realized_vol, bs_delta, RISK_FREE_RATE
 from agent.strategies import cash_secured_put, covered_call, long_directional, vertical_credit_spread
 from agent.backtest.iron_condor import price_iron_condor
-from agent.mcp_parsers import parse_latest_trade_price, parse_bars_closes
+from agent.mcp_parsers import parse_latest_trade_price, parse_bars_closes, parse_order_error
 from agent.live_chain import fetch_target_expiry_chain
 
 TARGET_DTE = 30
@@ -59,6 +59,37 @@ def _match_leg_to_real_chain(leg, chain: list, S: float, T: float, sigma: float)
         return c.delta if c.delta is not None else bs_delta(S, c.strike, T, sigma, c.option_type, RISK_FREE_RATE)
 
     return min(candidates, key=lambda c: abs(delta_of(c) - target_delta))
+
+
+def _call_leg_is_hedged(leg, all_legs: list) -> bool:
+    """True if `leg` is a short call with a further-OTM long call among `all_legs` of the same
+    strategy plan -- i.e. it's the short leg of a defined-risk spread (iron_condor's short_call,
+    hedged by its own long_call), not a naked call that needs 100 shares owned as cover. Without
+    this, RiskGate's naked-call check has no way to tell the two apart and rejects both alike."""
+    if leg.side != "sell" or leg.option_type != "call":
+        return False
+    return any(other.side == "buy" and other.option_type == "call" and other.strike > leg.strike
+               for other in all_legs)
+
+
+def _legs_properly_ordered(theoretical_legs: list, matched: list) -> bool:
+    """Guards against a real-chain match silently collapsing a spread's protection: a "buy" leg
+    must land strictly further OTM than any "sell" leg of the same option_type it's meant to
+    hedge. price_iron_condor_real_quotes() (agent/backtest/iron_condor.py) enforces this by
+    construction when matching real quotes; _match_leg_to_real_chain below matches each leg
+    independently by nearest delta with no such constraint, so on a sparse/coarse real chain the
+    "protective" leg could end up at, or on the wrong side of, its paired short leg's strike."""
+    for leg, real in zip(theoretical_legs, matched):
+        if leg.side != "buy":
+            continue
+        for other_leg, other_real in zip(theoretical_legs, matched):
+            if other_leg.side != "sell" or other_leg.option_type != leg.option_type:
+                continue
+            if leg.option_type == "put" and real.strike >= other_real.strike:
+                return False
+            if leg.option_type == "call" and real.strike <= other_real.strike:
+                return False
+    return True
 
 
 def _build_theoretical_legs(strategy: str, S: float, sigma: float, momentum: float):
@@ -96,10 +127,16 @@ async def run_cycle() -> dict:
         # {"result": [...]}, one level deeper. Verified against a live account: getting this
         # wrong silently zeroes out equity and positions, which trips RiskGate's "no account
         # snapshot" guard and auto-rejects every order.
-        account_info = json.loads(account_raw).get("data", {})
-        positions = json.loads(positions_raw).get("data", {}).get("result", [])
-        if not isinstance(positions, list):
-            positions = []
+        try:
+            account_info = json.loads(account_raw).get("data", {})
+            positions = json.loads(positions_raw).get("data", {}).get("result", [])
+            if not isinstance(positions, list):
+                positions = []
+        except (json.JSONDecodeError, AttributeError):
+            # Matches the guard agent/live_agent.py and agent/live_agent_openai.py already have
+            # around this identical parse -- fails to an empty snapshot rather than crashing the
+            # whole cycle; RiskGate's own equity<=0 guard then refuses to trade blind on it.
+            account_info, positions = {}, []
         risk_gate.refresh(account_info, positions)
 
         def _root_of(pos_symbol: str) -> str:
@@ -129,6 +166,11 @@ async def run_cycle() -> dict:
             sigma = realized_vol(closes, window=20)
             momentum = closes[-1] - closes[-10] if len(closes) >= 10 else 0.0
             theoretical_legs = _build_theoretical_legs(strategy_name, S, sigma, momentum)
+            # covered_call's plan includes a "stock" leg (the covering shares this agent never
+            # buys/sells itself -- see agent/strategies/__init__.py) so the *backtest* simulator
+            # scores its real P&L. It isn't a real OCC contract to look up on the chain, check
+            # against RiskGate, or submit an order for, so it's excluded here, before any of that.
+            theoretical_legs = [leg for leg in theoretical_legs if leg.option_type != "stock"]
 
             # Bound strike_price_gte/lte around the strikes the theoretical legs actually need,
             # with a wide margin, so the fetch can't miss them.
@@ -153,20 +195,31 @@ async def run_cycle() -> dict:
                 result["skipped"].append(f"{symbol}: chain didn't have a real contract for every leg of "
                                           f"{strategy_name}")
                 continue
+            if not _legs_properly_ordered(theoretical_legs, matched):
+                result["skipped"].append(f"{symbol}: real chain match produced an improperly-ordered "
+                                          f"{strategy_name} spread (a protective leg wasn't further OTM "
+                                          f"than its short leg) — skipping rather than submitting a broken hedge")
+                continue
 
             leg_orders = []
+            batch_committed = 0.0
             for leg, real in zip(theoretical_legs, matched):
                 decision = risk_gate.check("place_option_order", {
                     "symbol": real.symbol, "side": leg.side, "qty": 1, "limit_price": real.price,
-                })
+                }, covered_by_paired_long=_call_leg_is_hedged(leg, theoretical_legs))
                 if not decision.get("approved"):
                     reason = decision.get("reason") or ""
                     result["rejections"].append(f"{symbol}/{strategy_name}: {real.symbol} rejected — {reason}")
                     if "circuit breaker" in reason or "Kill switch" in reason:
                         alert("order_blocked_critical", agent="deterministic_agent",
                               symbol=symbol, strategy=strategy_name, reason=reason)
+                    # Roll back capital already committed by this batch's earlier legs -- e.g. an
+                    # iron condor's short_put/long_put pass before short_call is rejected -- so the
+                    # abandoned legs don't permanently eat into this cycle's real budget.
+                    risk_gate.release_commitment(batch_committed)
                     leg_orders = None
                     break
+                batch_committed += decision.get("estimated_capital_at_risk") or 0.0
                 leg_orders.append((leg, real))
 
             if not leg_orders:
@@ -192,14 +245,31 @@ async def run_cycle() -> dict:
                     "client_order_id": f"det-{symbol}-{strategy_name}-{real.symbol}",
                 }
                 order_result = await mcp.call_tool("place_option_order", order_args)
+                # Alpaca rejecting an order comes back as a normal (non-error) MCP result, not an
+                # exception -- see parse_order_error's docstring. Without this check, a rejected
+                # leg was logged/alerted/recorded as placed just like a successful one, and for a
+                # multi-leg strategy the loop would keep submitting the *following* legs as if
+                # this one had gone through, risking exactly the naked exposure the buy-before-sell
+                # ordering above exists to prevent.
+                order_error = parse_order_error(order_result)
                 log_event("deterministic_order", symbol=symbol, strategy=strategy_name,
                           strategy_metrics=pick["metrics"], leg=real.symbol, side=leg.side,
-                          delta_target=leg.option_type, limit_price=real.price, result=order_result[:1500])
+                          delta_target=leg.option_type, limit_price=real.price, result=order_result[:1500],
+                          error=order_error)
+                if order_error:
+                    alert("order_rejected", agent="deterministic_agent", symbol=symbol, strategy=strategy_name,
+                          contract=real.symbol, side=leg.side, limit_price=real.price, reason=order_error)
+                    result["rejections"].append(
+                        f"{symbol}/{strategy_name}: {real.symbol} rejected by Alpaca — {order_error} "
+                        f"(legs already placed this batch: {', '.join(p['contract'] for p in placed) or 'none'})"
+                    )
+                    break
                 alert("order_placed", agent="deterministic_agent", symbol=symbol, strategy=strategy_name,
                       contract=real.symbol, side=leg.side, limit_price=real.price)
                 placed.append({"contract": real.symbol, "side": leg.side, "limit_price": real.price})
 
-            result["orders_placed"].append({"symbol": symbol, "strategy": strategy_name, "legs": placed})
+            if placed:
+                result["orders_placed"].append({"symbol": symbol, "strategy": strategy_name, "legs": placed})
 
     log_event("deterministic_cycle_complete", **result)
     return result

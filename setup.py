@@ -85,6 +85,7 @@ def main():
     try:
         import mcp  # noqa: F401
         import anthropic  # noqa: F401
+        import openai  # noqa: F401
         import alpaca  # noqa: F401
         import dotenv  # noqa: F401
     except ImportError:

@@ -21,6 +21,7 @@ from agent.openai_cost import call_cost
 from agent.backtest_evidence import load_backtest_summary
 from agent.reflection import summarize_for_prompt
 from agent.live_agent import _build_system_prompt
+from agent.mcp_parsers import parse_order_error
 
 
 def _to_openai_tools(mcp_tools: list) -> list:
@@ -110,19 +111,26 @@ async def run_cycle() -> dict:
                 if decision.get("approved"):
                     result_text = await mcp.call_tool(name, tool_input)
                     if name in ORDER_TOOLS:
-                        alert("order_placed", agent="live_agent_openai", tool=name, input=tool_input)
+                        # See the matching comment in agent/live_agent.py: Alpaca rejecting an
+                        # order is a normal non-error MCP result, not an exception, so this used
+                        # to fire "order_placed" even for an order Alpaca actually rejected.
+                        order_error = parse_order_error(result_text)
+                        if order_error:
+                            alert("order_rejected", agent="live_agent_openai", tool=name,
+                                  input=tool_input, reason=order_error)
+                        else:
+                            alert("order_placed", agent="live_agent_openai", tool=name, input=tool_input)
                     if name in ("get_account_info", "get_all_positions"):
                         try:
                             parsed = json.loads(result_text).get("data", {})
-                            current_positions = [{"symbol": s, "qty": q} for s, q in risk_gate.open_positions.items()]
+                            # Update only the field this tool call actually refreshed -- see the matching
+                            # comment in agent/live_agent.py for why reconstructing a fake stand-in for the
+                            # other argument here was both unnecessary and (post risk-gate refactor) lossy.
                             if name == "get_account_info":
-                                risk_gate.refresh(parsed, current_positions)
+                                risk_gate.update_account(parsed)
                             else:
                                 positions_list = parsed.get("result", []) if isinstance(parsed, dict) else []
-                                risk_gate.refresh(
-                                    {"equity": risk_gate.equity, "last_equity": risk_gate.day_start_equity},
-                                    positions_list,
-                                )
+                                risk_gate.update_positions(positions_list if isinstance(positions_list, list) else [])
                         except (json.JSONDecodeError, TypeError):
                             pass
                 else:

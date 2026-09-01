@@ -30,6 +30,26 @@ from agent.risk.gates import parse_occ_symbol
 from agent.trade_log import log_event
 from agent.reflection import record_closed_position
 from agent.alerts import alert
+from agent.mcp_parsers import parse_order_error
+
+
+def _unwrap_result_list(raw: str, context: str) -> list:
+    """Unwraps a get_all_positions/get_orders response's data.result list. On an MCP-level
+    failure (agent/mcp/client.py returns {"error": text} when the tool call itself errors,
+    e.g. auth/rate-limit/network), this used to be unguarded: `.get(...)` doesn't raise on
+    that shape, it just silently resolves to [] since there's no "data" key -- which
+    reintroduces the exact stale-close-order race symbols_with_open_orders exists to prevent,
+    and can quietly skip a position that needed closing, with nothing logged. Alerts instead of
+    raising, so one failed call doesn't abort the *other*, independent housekeeping step in the
+    same cycle (order cancellation vs. position management each fetch their own order/position
+    list)."""
+    data = json.loads(raw)
+    if isinstance(data, dict) and isinstance(data.get("error"), (str, dict)):
+        alert("mcp_call_failed", context=context, error=data["error"])
+        log_event("mcp_call_failed", context=context, error=data["error"])
+        return []
+    result = data.get("data", {}).get("result", [])
+    return result if isinstance(result, list) else []
 
 
 def _close_order_args(symbol: str, side: str, qty: float, current_price: float) -> dict:
@@ -55,9 +75,7 @@ def _close_order_args(symbol: str, side: str, qty: float, current_price: float) 
 
 async def _manage_positions(mcp) -> list:
     positions_raw = await mcp.call_tool("get_all_positions", {})
-    positions = json.loads(positions_raw).get("data", {}).get("result", [])
-    if not isinstance(positions, list):
-        positions = []
+    positions = _unwrap_result_list(positions_raw, context="manage_positions.get_all_positions")
 
     # Symbols with an order still open right now (not yet stale enough for
     # _cancel_stale_orders, which runs before this and only cancels orders older than
@@ -68,12 +86,15 @@ async def _manage_positions(mcp) -> list:
     # unnecessarily crossing the spread again each time (the real cost of over-trading,
     # even though Alpaca charges $0 commission on options).
     open_orders_raw = await mcp.call_tool("get_orders", {"status": "open"})
-    open_orders = json.loads(open_orders_raw).get("data", {}).get("result", [])
-    symbols_with_open_orders = {o.get("symbol") for o in open_orders if isinstance(open_orders, list)} \
-        if isinstance(open_orders, list) else set()
+    open_orders = _unwrap_result_list(open_orders_raw, context="manage_positions.get_orders")
+    # Guard each element, not just the container: a non-dict entry in open_orders would raise
+    # AttributeError on .get() and abort this whole cycle's position management uncaught.
+    symbols_with_open_orders = {o.get("symbol") for o in open_orders if isinstance(o, dict)}
 
     closed = []
     for pos in positions:
+        if not isinstance(pos, dict):
+            continue
         symbol = pos.get("symbol", "")
         parsed = parse_occ_symbol(symbol)
         if not parsed:
@@ -82,9 +103,17 @@ async def _manage_positions(mcp) -> list:
         if symbol in symbols_with_open_orders:
             continue  # already has a pending close order this cycle; let it fill or go stale first
 
+        side = pos.get("side")
+        if side not in ("long", "short"):
+            # Don't guess: _close_order_args's sell/buy direction is derived directly from this,
+            # and a wrong guess on a genuinely short position would submit a close order in the
+            # wrong direction. Fail safe by skipping this position rather than assuming "long".
+            log_event("position_management_skipped", symbol=symbol,
+                       reason=f"unrecognized position side {side!r}")
+            continue
+
         dte = (parsed["expiration"] - date.today()).days
         qty = abs(float(pos.get("qty", 0) or 0))
-        side = pos.get("side", "long")
         plpc = float(pos.get("unrealized_plpc", 0) or 0)
         current_price = float(pos.get("current_price", 0) or 0)
 
@@ -101,8 +130,18 @@ async def _manage_positions(mcp) -> list:
 
         order_args = _close_order_args(symbol, side, qty, current_price)
         result_text = await mcp.call_tool("place_option_order", order_args)
-        log_event("position_closed", symbol=symbol, reason=reason, dte=dte, plpc=plpc,
-                   result=result_text[:1000])
+        # Alpaca rejecting an order is a normal (non-error) MCP result, not an exception -- see
+        # parse_order_error's docstring. Without this check, a rejected close order was still
+        # logged as "position_closed" and recorded into the reflection log as a real exit, even
+        # though the position is still open and still at risk (it would only be picked back up
+        # for management on the *next* cycle's fresh position fetch).
+        order_error = parse_order_error(result_text)
+        event = "position_close_rejected" if order_error else "position_closed"
+        log_event(event, symbol=symbol, reason=reason, dte=dte, plpc=plpc,
+                   result=result_text[:1000], error=order_error)
+        if order_error:
+            alert("position_close_rejected", symbol=symbol, reason=reason, error=order_error)
+            continue  # not actually closed -- leave it for the next cycle to retry
         alert("position_closed", symbol=symbol, reason=reason, plpc=round(plpc, 4))
         # Records against the last-seen unrealized P&L at the moment the close was submitted,
         # not a confirmed fill price — close enough for a limit order sized off current_price,
@@ -117,28 +156,42 @@ async def _cancel_stale_orders(mcp) -> list:
     if CONFIG.stale_order_minutes <= 0:
         return []
     orders_raw = await mcp.call_tool("get_orders", {"status": "open"})
-    orders = json.loads(orders_raw).get("data", {}).get("result", [])
-    if not isinstance(orders, list):
-        orders = []
+    orders = _unwrap_result_list(orders_raw, context="cancel_stale_orders.get_orders")
 
     now = datetime.now(timezone.utc)
     canceled = []
     for order in orders:
+        if not isinstance(order, dict):
+            continue
         submitted_at = order.get("submitted_at")
         order_id = order.get("id")
         if not submitted_at or not order_id:
             continue
         try:
             submitted = datetime.fromisoformat(submitted_at.replace("Z", "+00:00"))
-        except ValueError:
+            age_minutes = (now - submitted).total_seconds() / 60
+        except (ValueError, TypeError):
+            # TypeError specifically: fromisoformat succeeding but returning a naive datetime
+            # (no "Z"/offset in submitted_at) makes `now - submitted` raise, since `now` is
+            # timezone-aware -- that used to be uncaught, aborting stale-order cancellation
+            # (and, since it's called first, position management too) for every order this
+            # cycle over one malformed timestamp instead of just skipping that one order.
             continue
-        age_minutes = (now - submitted).total_seconds() / 60
         if age_minutes < CONFIG.stale_order_minutes:
             continue
 
         result_text = await mcp.call_tool("cancel_order_by_id", {"order_id": order_id})
-        log_event("order_canceled_stale", order_id=order_id, symbol=order.get("symbol"),
-                   age_minutes=round(age_minutes, 1), result=result_text[:500])
+        # A rejected cancellation (e.g. the order already filled/canceled between the get_orders
+        # snapshot and this call) comes back as a normal non-error MCP result too -- without this
+        # check it was unconditionally reported and counted as canceled, when Alpaca may not have
+        # actually canceled anything.
+        cancel_error = parse_order_error(result_text)
+        event = "order_cancel_rejected" if cancel_error else "order_canceled_stale"
+        log_event(event, order_id=order_id, symbol=order.get("symbol"),
+                   age_minutes=round(age_minutes, 1), result=result_text[:500], error=cancel_error)
+        if cancel_error:
+            alert("order_cancel_rejected", order_id=order_id, symbol=order.get("symbol"), error=cancel_error)
+            continue  # not actually canceled -- still open, and still ties up qty_available
         canceled.append({"order_id": order_id, "symbol": order.get("symbol"), "age_minutes": round(age_minutes, 1)})
 
     return canceled

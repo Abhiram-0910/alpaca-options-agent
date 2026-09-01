@@ -43,12 +43,22 @@ def cash_secured_put(S: float, T: float, sigma: float, target_delta: float = -0.
 def covered_call(S: float, T: float, sigma: float, target_delta: float = 0.30) -> StrategyPlan:
     K = strike_for_delta(S, T, sigma, "call", target_delta)
     premium = bs_price(S, K, T, sigma, "call")
-    leg = TradeLeg("call", K, "sell", premium)
+    call_leg = TradeLeg("call", K, "sell", premium)
+    # The covering 100 shares, as their own leg -- NOT a new order (this agent never buys stock
+    # outright; the shares must already be held, see agent/risk/gates.py's naked-call check).
+    # Included so agent/backtest/simulator.py's generic simulator scores this trade as an
+    # actual covered call (P&L bounded by the stock's own move, offset by the call premium) --
+    # without it, the simulator only ever saw the short call leg and scored covered_call
+    # identically to a naked short call, which can show a large, statistically "significant"
+    # profit from an underlying move that would have been a real loss once the stock leg's own
+    # loss is counted (verified: a synthetic -17% decline scored +$1,915 by the simulator
+    # against a true -$1,151 covered-call P&L for the same path).
+    stock_leg = TradeLeg("stock", S, "buy", S)
     return StrategyPlan(
         name="covered_call",
-        legs=[leg],
-        net_credit=premium,
-        max_loss_per_contract=S * 100,  # capped by underlying downside, requires owning 100 shares
+        legs=[call_leg, stock_leg],
+        net_credit=premium - S,  # premium received, minus the cost of the shares it's covered by
+        max_loss_per_contract=max(S - premium, 0) * 100,  # capped by underlying downside, net of credit
         rationale=f"Sell {K:.2f} call (~{target_delta:.2f} delta) for {premium:.2f} credit against 100 owned "
                    f"shares; income strategy, caps upside above {K:.2f}.",
     )

@@ -190,6 +190,20 @@ def run_backtest(symbols=None) -> dict:
                 extended_summary = None
                 if validation.passed:
                     ext_closes, _ = fetch_bars(client, symbol, EXTENDED_LOOKBACK_DAYS)
+                    if len(ext_closes) < 60:
+                        # "Anything that PASSes the initial backtest is automatically retested on
+                        # a much longer lookback window before it's trusted at all" (module
+                        # docstring) -- but adapter.promote_to_paper() above already set
+                        # enabled_for_paper=True from the initial window alone, and skipping this
+                        # block used to leave it there un-demoted, silently promoting a strategy
+                        # that was never actually retested (only reachable for a symbol with too
+                        # little extended history, e.g. a very recent IPO -- not any current
+                        # watchlist member, but a real gap for whatever the watchlist grows into).
+                        adapter.demote(
+                            f"passed on {LOOKBACK_DAYS}d window but extended history has only "
+                            f"{len(ext_closes)} bars (<60) — cannot run the required "
+                            f"{EXTENDED_LOOKBACK_DAYS}d retest, so this pass is not trusted without it"
+                        )
                     if len(ext_closes) >= 60:
                         ext_result = _validate_symbol_strategy(
                             strategy_name, ext_closes, symbol, risk_params.stop_loss_price_move

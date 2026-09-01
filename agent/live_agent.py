@@ -19,6 +19,7 @@ from agent.alerts import alert
 from agent.llm_cost import call_cost as _call_cost
 from agent.backtest_evidence import load_backtest_summary
 from agent.reflection import summarize_for_prompt
+from agent.mcp_parsers import parse_order_error
 
 STRATEGY_UNIVERSE = """\
 You may only use these five options strategy families (never naked/undefined-risk trades):
@@ -179,19 +180,30 @@ async def run_cycle() -> dict:
                 if decision.get("approved"):
                     result_text = await mcp.call_tool(block.name, block.input)
                     if block.name in ORDER_TOOLS:
-                        alert("order_placed", agent="live_agent", tool=block.name, input=block.input)
+                        # Alpaca rejecting an order comes back as a normal (non-error) MCP result,
+                        # not an exception (see parse_order_error's docstring) -- without this check
+                        # every approved order-tool call fired an "order_placed" alert regardless of
+                        # whether Alpaca actually accepted it, which would misreport a rejected order
+                        # as filled to whoever is watching the alerts channel/log.
+                        order_error = parse_order_error(result_text)
+                        if order_error:
+                            alert("order_rejected", agent="live_agent", tool=block.name,
+                                  input=block.input, reason=order_error)
+                        else:
+                            alert("order_placed", agent="live_agent", tool=block.name, input=block.input)
                     if block.name in ("get_account_info", "get_all_positions"):
                         try:
                             parsed = json.loads(result_text).get("data", {})
-                            current_positions = [{"symbol": s, "qty": q} for s, q in risk_gate.open_positions.items()]
+                            # Update only the field this tool call actually refreshed -- update_account/
+                            # update_positions are independent, so there's no need to reconstruct a fake
+                            # stand-in for whichever argument wasn't just re-fetched (and doing so risked
+                            # losing state: a synthetic positions list built from risk_gate.open_positions
+                            # alone would drop held_option_roots, since option legs live there, not there).
                             if block.name == "get_account_info":
-                                risk_gate.refresh(parsed, current_positions)
+                                risk_gate.update_account(parsed)
                             else:
                                 positions_list = parsed.get("result", []) if isinstance(parsed, dict) else []
-                                risk_gate.refresh(
-                                    {"equity": risk_gate.equity, "last_equity": risk_gate.day_start_equity},
-                                    positions_list,
-                                )
+                                risk_gate.update_positions(positions_list if isinstance(positions_list, list) else [])
                         except (json.JSONDecodeError, TypeError):
                             pass
                 else:

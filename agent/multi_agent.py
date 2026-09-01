@@ -22,14 +22,36 @@ from anthropic import AsyncAnthropic
 
 from agent.config import CONFIG, assert_paper_trading
 from agent.mcp.client import AlpacaMCPClient
-from agent.risk.gates import RiskGate, ORDER_TOOLS
+from agent.risk.gates import RiskGate, ORDER_TOOLS, parse_occ_symbol
 from agent.trade_log import log_event
 from agent.kill_switch import assert_not_killed
 from agent.alerts import alert
 from agent.llm_cost import call_cost
-from agent.backtest_evidence import load_backtest_summary
+from agent.backtest_evidence import load_backtest_summary, load_cleared_strategies
+from agent.mcp_parsers import parse_order_error
 from agent.reflection import summarize_for_prompt
 from agent.live_agent import STRATEGY_UNIVERSE
+
+
+def _call_leg_is_hedged(leg: dict, all_legs: list) -> bool:
+    """True if `leg` (a proposal leg dict: symbol/side/qty) is a short call with a further-OTM
+    long call among `all_legs` of the same proposal -- i.e. it's the short leg of a defined-risk
+    spread (an iron condor's short call, hedged by its own long call), not a naked call that
+    needs 100 shares owned as cover. Mirrors agent/deterministic_agent.py's helper of the same
+    name, adapted for proposal legs (real OCC symbols with no .strike/.option_type of their own)
+    instead of theoretical TradeLeg objects."""
+    parsed = parse_occ_symbol(leg.get("symbol", ""))
+    if not parsed or (leg.get("side") or "").lower() != "sell" or parsed["option_type"] != "call":
+        return False
+    for other in all_legs:
+        if other is leg:
+            continue
+        other_parsed = parse_occ_symbol(other.get("symbol", ""))
+        if (other_parsed and (other.get("side") or "").lower() == "buy"
+                and other_parsed["option_type"] == "call" and other_parsed["strike"] > parsed["strike"]):
+            return True
+    return False
+
 
 PROPOSE_TRADE_TOOL = {
     "name": "propose_trade",
@@ -255,22 +277,53 @@ async def run_cycle() -> dict:
         # refresh once more so RiskGate has current numbers before the actual execution decision.
         account_raw = await mcp.call_tool("get_account_info", {})
         positions_raw = await mcp.call_tool("get_all_positions", {})
-        account_info = json.loads(account_raw).get("data", {})
-        positions = json.loads(positions_raw).get("data", {}).get("result", [])
-        risk_gate.refresh(account_info, positions if isinstance(positions, list) else [])
+        try:
+            account_info = json.loads(account_raw).get("data", {})
+            positions = json.loads(positions_raw).get("data", {}).get("result", [])
+            if not isinstance(positions, list):
+                positions = []
+        except (json.JSONDecodeError, AttributeError):
+            account_info, positions = {}, []
+        risk_gate.refresh(account_info, positions)
+
+        symbol = proposal.get("symbol")
+        strategy = proposal.get("strategy")
+        # RiskGate's backtest-validation gate is symbol-level only (a bare place_option_order
+        # call has no strategy label for it to check) -- so a symbol with ONE cleared strategy
+        # (e.g. GOOGL/cash_secured_put) would otherwise silently let this proposal through with
+        # a completely different, never-validated strategy for that same symbol. The Proposer
+        # *does* state a strategy explicitly, so cross-check it here before RiskGate ever sees
+        # the legs.
+        if CONFIG.require_backtest_validation and strategy not in load_cleared_strategies(symbol):
+            cleared = load_cleared_strategies(symbol)
+            reason = (f"{symbol}/{strategy} has not itself passed backtest validation "
+                      f"(cleared for {symbol}: {', '.join(sorted(cleared)) or 'none'})")
+            alert("order_blocked_critical", agent="multi_agent", symbol=symbol, strategy=strategy, reason=reason)
+            log_event("multi_agent_cycle_complete", proposal=proposal, verdict=verdict,
+                       risk_gate_rejections=[reason], cost_usd=round(total_cost, 5))
+            return {"tool_calls": total_tool_calls, "api_calls": total_api_calls,
+                    "cost_usd": round(total_cost, 5), "rejections": [reason],
+                    "summary": f"Critic approved {symbol}/{strategy} but it hasn't itself cleared "
+                               f"backtest validation for {symbol}: {reason}"}
 
         legs = proposal.get("legs") or []
         rejections = []
         approved_legs = []
+        batch_committed = 0.0
         for leg in legs:
             decision = risk_gate.check("place_option_order", {
                 "symbol": leg.get("symbol"), "side": leg.get("side"), "qty": leg.get("qty", 1),
                 "limit_price": leg.get("limit_price"),
-            })
+            }, covered_by_paired_long=_call_leg_is_hedged(leg, legs))
             if not decision.get("approved"):
                 rejections.append(f"{leg.get('symbol')}: {decision.get('reason')}")
+                # Roll back capital already committed by this batch's earlier legs (see the
+                # matching comment in deterministic_agent.py) so an abandoned multi-leg proposal
+                # doesn't permanently eat into this cycle's real budget.
+                risk_gate.release_commitment(batch_committed)
                 approved_legs = None
                 break
+            batch_committed += decision.get("estimated_capital_at_risk") or 0.0
             approved_legs.append(leg)
 
         if not approved_legs:
@@ -296,8 +349,20 @@ async def run_cycle() -> dict:
             if leg.get("limit_price"):
                 order_args["limit_price"] = str(leg["limit_price"])
             order_result = await mcp.call_tool("place_option_order", order_args)
+            # Alpaca rejecting an order is a normal (non-error) MCP result, not an exception --
+            # see parse_order_error's docstring. Without this check, a rejected leg here was
+            # logged/alerted/recorded as placed just like a successful one, and the loop would
+            # keep submitting the following legs regardless, risking the exact naked exposure the
+            # buy-before-sell ordering above exists to prevent.
+            order_error = parse_order_error(order_result)
             log_event("multi_agent_order", symbol=proposal.get("symbol"), strategy=proposal.get("strategy"),
-                      leg=leg["symbol"], side=leg["side"], result=order_result[:1500])
+                      leg=leg["symbol"], side=leg["side"], result=order_result[:1500], error=order_error)
+            if order_error:
+                rejections.append(f"{leg['symbol']}: rejected by Alpaca — {order_error}")
+                alert("order_rejected", agent="multi_agent", symbol=proposal.get("symbol"),
+                      strategy=proposal.get("strategy"), contract=leg["symbol"], side=leg["side"],
+                      reason=order_error)
+                break
             alert("order_placed", agent="multi_agent", symbol=proposal.get("symbol"),
                   strategy=proposal.get("strategy"), contract=leg["symbol"], side=leg["side"])
             placed.append(leg["symbol"])
@@ -308,5 +373,6 @@ async def run_cycle() -> dict:
             "tool_calls": total_tool_calls, "api_calls": total_api_calls, "cost_usd": round(total_cost, 5),
             "rejections": rejections,
             "summary": f"Proposed {proposal.get('symbol')}/{proposal.get('strategy')}, critic approved "
-                       f"({verdict.get('rationale', '')[:200]}), placed: {', '.join(placed)}",
+                       f"({verdict.get('rationale', '')[:200]}), placed: {', '.join(placed)}"
+                       + (f" -- STOPPED after a rejection: {rejections[-1]}" if len(placed) < len(approved_legs) else ""),
         }

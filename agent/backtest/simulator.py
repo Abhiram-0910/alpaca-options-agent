@@ -1,14 +1,19 @@
 """Generic day-by-day trade simulator shared by every strategy (single-leg
 income/directional plays and the multi-leg iron condor alike).
 
-The uniform trick: for any collection of option legs (each with a strike,
-option_type, and side), the dollar value to *close* the position at some
-future (S, T_remaining) is the exact same formula used to price it fresh —
-sum leg prices with +1 for a sold leg (you'd have to buy it back) and -1 for
-a bought leg (you'd sell it back). That lets one simulator mark-to-market,
-apply an ATR-derived stop-loss, and settle at expiration for CSPs, covered
-calls, long calls/puts, credit spreads, and iron condors without any
-strategy-specific branching.
+The uniform trick: for any collection of legs (each with a strike, option_type,
+and side), the dollar value to *close* the position at some future (S,
+T_remaining) is the exact same formula used to price it fresh — sum leg prices
+with +1 for a sold leg (you'd have to buy it back) and -1 for a bought leg
+(you'd sell it back). That lets one simulator mark-to-market, apply an
+ATR-derived stop-loss, and settle at expiration for CSPs, covered calls, long
+calls/puts, credit spreads, and iron condors without any strategy-specific
+branching. A leg's `option_type` is normally "call"/"put", priced through
+`price_fn`; `option_type == "stock"` is the one exception, marked directly at
+the underlying price instead (see `_mark`/`_intrinsic`) and excluded from
+friction (see `_friction`) since it represents shares the agent already holds
+rather than a real trade -- covered_call() uses this to include the covering
+100 shares' own P&L in the simulated trade, not just the short call's.
 """
 from typing import Callable, Optional
 
@@ -20,10 +25,30 @@ def _leg_value(leg, price: float) -> float:
     return price if leg.side == "sell" else -price
 
 
+def _mark(leg, S_t: float, T_remaining: float, sigma: float, price_fn: Callable) -> float:
+    """Current mark for one leg. A "stock" leg (the shares backing a covered call) isn't an
+    option -- its price *is* the underlying price, not a Black-Scholes output -- so it's marked
+    directly at S_t rather than passed through price_fn."""
+    if leg.option_type == "stock":
+        return S_t
+    return price_fn(S_t, leg.strike, T_remaining, sigma, leg.option_type)
+
+
 def _intrinsic(leg, S_exit: float) -> float:
+    if leg.option_type == "stock":
+        return S_exit
     if leg.option_type == "call":
         return max(S_exit - leg.strike, 0.0)
     return max(leg.strike - S_exit, 0.0)
+
+
+def _friction(legs, leg_marks, cost_model) -> float:
+    """Round-trip transaction-cost friction, per leg. A "stock" leg is excluded: it represents
+    shares this agent never buys or sells (covered_call is only ever entered against stock
+    already held, and the shares aren't disposed of when the option leg is closed), so there's
+    no real trade to charge friction on."""
+    return sum(cost_model.round_trip_cost(getattr(leg, "price", 0.0), p)
+               for leg, p in zip(legs, leg_marks) if leg.option_type != "stock")
 
 
 def simulate_trade(
@@ -82,35 +107,31 @@ def simulate_trade(
             break
         S_t = closes[idx]
         T_remaining = max((hold_days - offset) / 365, 1 / 365)
-        leg_marks = [price_fn(S_t, leg.strike, T_remaining, sigma, leg.option_type) for leg in legs]
+        leg_marks = [_mark(leg, S_t, T_remaining, sigma, price_fn) for leg in legs]
         mark_value = sum(_leg_value(leg, p) for leg, p in zip(legs, leg_marks))
         pnl_dollars = (entry_credit - mark_value) * 100
 
         if (stop_loss_underlying_move is not None and pnl_dollars < 0
                 and abs(S_t - S0) >= stop_loss_underlying_move):
-            friction = sum(cost_model.round_trip_cost(getattr(leg, "price", 0.0), p)
-                            for leg, p in zip(legs, leg_marks))
+            friction = _friction(legs, leg_marks, cost_model)
             return _record(pnl_dollars - friction, max_loss_dollars, "stop_loss", offset, symbol, strategy,
                             entry_index)
 
         if (stop_loss_credit_multiple is not None and entry_credit > 0
                 and pnl_dollars <= -stop_loss_credit_multiple * entry_credit * 100):
-            friction = sum(cost_model.round_trip_cost(getattr(leg, "price", 0.0), p)
-                            for leg, p in zip(legs, leg_marks))
+            friction = _friction(legs, leg_marks, cost_model)
             return _record(pnl_dollars - friction, max_loss_dollars, "stop_loss", offset, symbol, strategy,
                             entry_index)
 
         if profit_target_pct is not None and entry_credit > 0:
             target = entry_credit * 100 * profit_target_pct
             if pnl_dollars >= target:
-                friction = sum(cost_model.round_trip_cost(getattr(leg, "price", 0.0), p)
-                                for leg, p in zip(legs, leg_marks))
+                friction = _friction(legs, leg_marks, cost_model)
                 return _record(pnl_dollars - friction, max_loss_dollars, "profit_target", offset, symbol,
                                 strategy, entry_index)
 
         if force_exit_offset is not None and offset >= force_exit_offset:
-            friction = sum(cost_model.round_trip_cost(getattr(leg, "price", 0.0), p)
-                            for leg, p in zip(legs, leg_marks))
+            friction = _friction(legs, leg_marks, cost_model)
             return _record(pnl_dollars - friction, max_loss_dollars, "time_exit", offset, symbol,
                             strategy, entry_index)
 
@@ -119,8 +140,7 @@ def simulate_trade(
     leg_settles = [_intrinsic(leg, S_exit) for leg in legs]
     settle_value = sum(_leg_value(leg, p) for leg, p in zip(legs, leg_settles))
     pnl_dollars = (entry_credit - settle_value) * 100
-    friction = sum(cost_model.round_trip_cost(getattr(leg, "price", 0.0), p)
-                    for leg, p in zip(legs, leg_settles))
+    friction = _friction(legs, leg_settles, cost_model)
     return _record(pnl_dollars - friction, max_loss_dollars, "expiration", exit_idx - entry_index, symbol,
                     strategy, entry_index)
 
