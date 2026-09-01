@@ -254,6 +254,38 @@ stop from the backtest engine) — a strategy-aware version would cross-referenc
 `logs/trade_log.jsonl` to recover which strategy opened each position. Noted as a next step
 rather than shipped half-working.
 
+### 8. Self-learning loop (`agent/reflection.py`) — process, not outcome
+Every closed position gets a structured post-mortem, deliberately **not** built as "learn from
+losses." A strategy with a real, validated edge still loses on a predictable fraction of its
+trades — GOOGL `cash_secured_put`'s own backtest win rate is 70%, meaning 30% of *correctly
+executed* trades lose money. A naive loop that avoids whatever pattern preceded a loss would
+spend its entire learning budget unlearning a real edge based on ordinary variance, directly
+contradicting the statistical discipline the rest of this project is built on. So this module
+checks two things instead, neither of which is "did this trade make money":
+
+- **Process, not outcome**: did entry actually respect what `RiskGate` is supposed to guarantee
+  (backtest-cleared symbol, DTE bounds, position size)? With the hard gates already in place,
+  this should be clean by construction — a `[PROCESS FLAG]` means something slipped through or a
+  position was opened outside this system, which is the actual signal worth surfacing.
+- **Realized-vs-backtested drift** (`strategy_drift_report`): once there's enough live history
+  (10+ closed trades for the same strategy/symbol), is the live win rate/return still tracking
+  what the backtest predicted, or has the edge stopped working? That comparison — not any single
+  trade's result — is the statistically honest version of "is this still working." Reports
+  `insufficient_live_trades` honestly below that threshold rather than drawing a conclusion from
+  a handful of trades.
+
+The resulting summary (`summarize_for_prompt()`) is injected as plain text into the next cycle's
+system prompt across all three LLM paths (`live_agent.py`, `live_agent_openai.py`,
+`multi_agent.py`) — informational continuity across cycles, **not** a weight update; no
+fine-tuning happens anywhere in this project. Explicitly out of scope and why: fine-tuning an
+LLM on a handful of real trades is both infeasible (nowhere near enough data) and the wrong
+statistical shape for a strategy with expected variance in its outcomes.
+
+De-duplicates by symbol — verified necessary live: `order_manager.py` resubmits a close order
+every cycle a position still qualifies for one, and on a thin/illiquid contract that order can go
+unfilled and get resubmitted cycle after cycle, which without the guard logged another "closed"
+entry each time for a position that never actually closed.
+
 ## Setup
 
 **One command:**

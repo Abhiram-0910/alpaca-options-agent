@@ -28,6 +28,7 @@ from agent.kill_switch import assert_not_killed
 from agent.alerts import alert
 from agent.llm_cost import call_cost
 from agent.backtest_evidence import load_backtest_summary
+from agent.reflection import summarize_for_prompt
 from agent.live_agent import STRATEGY_UNIVERSE
 
 PROPOSE_TRADE_TOOL = {
@@ -81,7 +82,15 @@ REVIEW_DECISION_TOOL = {
 }
 
 
-def _proposer_system_prompt(backtest_summary: str) -> str:
+def _proposer_system_prompt(backtest_summary: str, reflection_summary: str = None) -> str:
+    reflection_section = ""
+    if reflection_summary:
+        reflection_section = f"""
+Recent closed positions (facts, not verdicts — a strategy with a real edge still loses some of
+the time, so a loss alone is not evidence anything was wrong; a [PROCESS FLAG] means something
+didn't match this system's own records, worth noting if it's on a symbol you're considering):
+{reflection_summary}
+"""
     return f"""You are the RESEARCH agent in a two-agent options-trading pipeline on a real Alpaca \
 PAPER account. You act exclusively through the read-only tools provided (Alpaca's MCP server, \
 minus every order-placing tool — you cannot place an order no matter what).
@@ -93,7 +102,7 @@ Watchlist (only research these underlyings): {', '.join(CONFIG.watchlist)}
 Backtest validation results per symbol — strongly prefer strategies marked PASSED; a symbol with
 no PASSED strategy should generally be skipped rather than traded on discretion alone:
 {backtest_summary}
-
+{reflection_section}
 Work through this cycle methodically:
 1. Call get_account_info and get_all_positions first to know the starting state.
 2. For 2-4 promising watchlist symbols, pull recent stock bars/snapshot, news, and the option chain
@@ -202,6 +211,7 @@ async def run_cycle() -> dict:
     assert_not_killed()
 
     backtest_summary = load_backtest_summary()
+    reflection_summary = summarize_for_prompt()
     anthropic = AsyncAnthropic(api_key=CONFIG.anthropic_api_key)
     risk_gate = RiskGate()
 
@@ -210,7 +220,7 @@ async def run_cycle() -> dict:
         read_only_tools = [t for t in all_tools if t["name"] not in ORDER_TOOLS] + [PROPOSE_TRADE_TOOL]
 
         proposer_result = await _run_proposer(anthropic, mcp, read_only_tools,
-                                               _proposer_system_prompt(backtest_summary))
+                                               _proposer_system_prompt(backtest_summary, reflection_summary))
         proposal = proposer_result["proposal"]
         total_cost = proposer_result["cost_usd"]
         total_api_calls = proposer_result["api_calls"]

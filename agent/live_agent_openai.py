@@ -19,6 +19,7 @@ from agent.kill_switch import assert_not_killed
 from agent.alerts import alert
 from agent.openai_cost import call_cost
 from agent.backtest_evidence import load_backtest_summary
+from agent.reflection import summarize_for_prompt
 from agent.live_agent import _build_system_prompt
 
 
@@ -40,7 +41,8 @@ async def run_cycle() -> dict:
     assert_not_killed()
 
     backtest_summary = load_backtest_summary()
-    system_prompt = _build_system_prompt(backtest_summary)
+    reflection_summary = summarize_for_prompt()
+    system_prompt = _build_system_prompt(backtest_summary, reflection_summary)
     client = AsyncOpenAI(api_key=CONFIG.openai_api_key)
     risk_gate = RiskGate()
 

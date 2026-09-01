@@ -28,6 +28,7 @@ from agent.config import CONFIG, assert_paper_trading
 from agent.mcp.client import AlpacaMCPClient
 from agent.risk.gates import parse_occ_symbol
 from agent.trade_log import log_event
+from agent.reflection import record_closed_position
 from agent.alerts import alert
 
 
@@ -87,6 +88,10 @@ async def _manage_positions(mcp) -> list:
         log_event("position_closed", symbol=symbol, reason=reason, dte=dte, plpc=plpc,
                    result=result_text[:1000])
         alert("position_closed", symbol=symbol, reason=reason, plpc=round(plpc, 4))
+        # Records against the last-seen unrealized P&L at the moment the close was submitted,
+        # not a confirmed fill price — close enough for a limit order sized off current_price,
+        # and simpler than tracking async fills; disclosed as an approximation, not exact.
+        record_closed_position(symbol, exit_reason=reason, plpc=round(plpc, 4))
         closed.append({"symbol": symbol, "reason": reason, "plpc": round(plpc, 4)})
 
     return closed

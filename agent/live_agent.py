@@ -18,6 +18,7 @@ from agent.kill_switch import assert_not_killed
 from agent.alerts import alert
 from agent.llm_cost import call_cost as _call_cost
 from agent.backtest_evidence import load_backtest_summary
+from agent.reflection import summarize_for_prompt
 
 STRATEGY_UNIVERSE = """\
 You may only use these five options strategy families (never naked/undefined-risk trades):
@@ -47,7 +48,16 @@ cleared that gate. Full numbers for every combination (pass and fail) are logged
 docs/strategy_graveyard.md if you want more detail than the summary below."""
 
 
-def _build_system_prompt(backtest_summary: str) -> str:
+def _build_system_prompt(backtest_summary: str, reflection_summary: str = None) -> str:
+    reflection_section = ""
+    if reflection_summary:
+        reflection_section = f"""
+Recent closed positions (facts, not verdicts — a strategy with a real edge still loses some of
+the time; GOOGL cash_secured_put's own backtest win rate is 70%, so a loss here is not by itself
+evidence anything was wrong. A [PROCESS FLAG] means something didn't match this system's own
+records, which IS worth noting in your rationale if you see one on the symbol you're considering):
+{reflection_summary}
+"""
     return f"""You are an autonomous options-trading agent operating a real Alpaca PAPER trading account.
 You act exclusively through the tools provided (Alpaca's MCP server) — never invent data or symbols.
 
@@ -58,7 +68,7 @@ Watchlist (only trade these underlyings): {', '.join(CONFIG.watchlist)}
 Backtest validation results per symbol — strongly prefer strategies marked PASSED; a symbol with
 no PASSED strategy should generally be skipped this cycle rather than traded on discretion alone:
 {backtest_summary}
-
+{reflection_section}
 Risk gates you cannot bypass (a rejected place_option_order tool call will tell you why):
 - Max {CONFIG.max_positions_open} distinct open underlyings at once.
 - Max {CONFIG.max_allocation_pct_per_trade:.0%} of account equity at risk per trade.
@@ -84,7 +94,8 @@ async def run_cycle() -> dict:
     assert_not_killed()
 
     backtest_summary = load_backtest_summary()
-    system_prompt = _build_system_prompt(backtest_summary)
+    reflection_summary = summarize_for_prompt()
+    system_prompt = _build_system_prompt(backtest_summary, reflection_summary)
     anthropic = AsyncAnthropic(api_key=CONFIG.anthropic_api_key)
     risk_gate = RiskGate()
 
