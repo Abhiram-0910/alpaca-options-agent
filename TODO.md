@@ -9,10 +9,10 @@ Read at session start. Updated at session end.
 - [ ] **Resolve the judging criteria.** lablab's page says $6,000 / four criteria; judge Tony
       Lee's own LinkedIn post and lablab's X post say $5,000 / "P&L and creativity or
       engagement". Ask in Discord `#ineedhelp`. Changes what the video and write-up optimise for.
-- [ ] **Create the fresh Alpaca paper account.** Required for judging; the current one has test
+- [x] Fresh paper account created: PA314K6MBKHZ / 68068c02-619a-4002-8211-7a691c37a614, $100,000, zero history (2 Sep)
       trades and is ineligible. Fund at exactly $100,000. Record the account ID somewhere
       permanent — it goes on the submission form and P&L is judged from it.
-- [ ] **`GET /v2/account`** → confirm `options_trading_level == 3`. PATCH via account
+- [x] `GET /v2/account` → options_trading_level 3 confirmed, no PATCH needed (2 Sep)
       configurations if not.
 - [ ] **Place one real two-leg defined-risk spread** through the exact order path we intend to
       use. This is the live test of MCP issue #97. If it fails, fall back to direct REST POST
