@@ -113,3 +113,147 @@ def demo() -> None:
 
 if __name__ == "__main__":
     demo()
+
+
+async def run_cycle(dry_run: bool = True) -> dict:
+    """Build (and optionally submit) the single demonstration spread.
+
+    Defaults to dry_run: it prices the real chain, builds the exact mleg payload, and runs it
+    through the full risk gate, but does not submit. Nothing here decides anything the gate
+    would not also decide -- it is the gate that says yes.
+    """
+    import json
+    from datetime import date
+
+    from agent.config import assert_paper_trading
+    from agent.mcp.client import AlpacaMCPClient
+    from agent.risk.gates import RiskGate
+    from agent.kill_switch import assert_not_killed
+    from agent.trade_log import log_event
+    from agent.alerts import alert
+    from agent.options_pricing import realized_vol
+    from agent.strategies import vertical_credit_spread
+    from agent.mcp_parsers import parse_latest_trade_price, parse_bars_closes, parse_order_error
+    from agent.live_chain import fetch_target_expiry_chain
+    from agent.deterministic_agent import _match_leg_to_real_chain, TARGET_DTE
+
+    assert_paper_trading()
+    assert_not_killed()
+
+    result = {"validation_status": DEMONSTRATION_STATUS, "submitted": False, "skipped": [],
+              "rejections": [], "order": None}
+
+    if not CONFIG.demonstration_mode:
+        result["skipped"].append("DEMONSTRATION_MODE is not set; nothing to do")
+        return result
+
+    risk_gate = RiskGate()
+    async with AlpacaMCPClient() as mcp:
+        account_raw = await mcp.call_tool("get_account_info", {})
+        positions_raw = await mcp.call_tool("get_all_positions", {})
+        try:
+            account_info = json.loads(account_raw).get("data", {})
+            positions = json.loads(positions_raw).get("data", {}).get("result", [])
+            if not isinstance(positions, list):
+                positions = []
+        except (json.JSONDecodeError, AttributeError):
+            account_info, positions = {}, []
+        risk_gate.refresh(account_info, positions)
+
+        # This mode places one position, once. Anything already open means it has run.
+        if len(positions) >= MAX_OPEN_POSITIONS:
+            result["skipped"].append(
+                f"{len(positions)} position(s) already open; demonstration mode places at most "
+                f"{MAX_OPEN_POSITIONS} and will not add to the book")
+            log_event("demonstration_skipped", reason=result["skipped"][-1],
+                      validation_status=DEMONSTRATION_STATUS)
+            return result
+
+        price_raw = await mcp.call_tool("get_stock_latest_trade", {"symbols": SYMBOL})
+        bars_raw = await mcp.call_tool("get_stock_bars",
+                                       {"symbols": SYMBOL, "timeframe": "1Day", "days": 40})
+        try:
+            S = parse_latest_trade_price(price_raw)
+            closes = parse_bars_closes(bars_raw, SYMBOL)
+        except (ValueError, KeyError, TypeError) as exc:
+            result["skipped"].append(f"could not parse live {SYMBOL} price/bars ({exc})")
+            return result
+        if len(closes) < 20:
+            result["skipped"].append("not enough recent bars for a volatility estimate")
+            return result
+
+        sigma = realized_vol(closes, window=20)
+        target_expiry, chain = await fetch_target_expiry_chain(
+            mcp, SYMBOL, S, TARGET_DTE, CONFIG.min_days_to_expiration,
+            CONFIG.max_days_to_expiration, round(S * 0.85, 2), round(S * 1.02, 2))
+        if not chain:
+            result["skipped"].append(
+                f"no listed {SYMBOL} contracts in the {CONFIG.min_days_to_expiration}-"
+                f"{CONFIG.max_days_to_expiration} DTE window")
+            return result
+
+        # Time to expiry from the expiry the chain returned, never a hardcoded constant:
+        # strike_for_delta is very sensitive to it at this horizon.
+        t_years = max((target_expiry - date.today()).days, 1) / 365
+        legs = vertical_credit_spread(S, t_years, sigma).legs
+        matched = [_match_leg_to_real_chain(leg, chain, S, t_years, sigma) for leg in legs]
+        if any(m is None for m in matched):
+            result["skipped"].append(f"{SYMBOL} chain had no real contract for every leg")
+            return result
+
+        short = next(m for leg, m in zip(legs, matched) if leg.side == "sell")
+        long_ = next(m for leg, m in zip(legs, matched) if leg.side == "buy")
+        if long_.strike >= short.strike:
+            result["skipped"].append(
+                f"real-chain match put the protective leg at {long_.strike} against a short at "
+                f"{short.strike} — that is not a hedge, skipping rather than submitting it")
+            return result
+
+        # Shade the mid credit to buy fill probability. These are indicative-feed marks, not
+        # OPRA, so the mid is an estimate to begin with; a demonstration that never fills
+        # demonstrates nothing, and giving up a tenth of the credit on a $380 position costs
+        # less than the information does.
+        credit = max(round((short.price - long_.price) * 0.9, 2), 0.01)
+        payload = {
+            "qty": str(MAX_CONTRACTS),
+            "type": "limit",
+            "time_in_force": "day",
+            "order_class": "mleg",
+            "limit_price": str(-credit),
+            "client_order_id": f"demo-{SYMBOL}-{date.today().isoformat()}",
+            "legs": [
+                {"symbol": long_.symbol, "side": "buy", "ratio_qty": "1",
+                 "position_intent": "buy_to_open"},
+                {"symbol": short.symbol, "side": "sell", "ratio_qty": "1",
+                 "position_intent": "sell_to_open"},
+            ],
+        }
+
+        decision = risk_gate.check("place_option_order", payload)
+        result["order"] = {"payload": payload, "underlying_price": S, "expiry": str(target_expiry),
+                           "decision": decision}
+        if not decision.get("approved"):
+            result["rejections"].append(decision.get("reason", ""))
+            log_event("demonstration_rejected", reason=decision.get("reason"),
+                      payload=payload, validation_status=DEMONSTRATION_STATUS)
+            return result
+
+        if dry_run:
+            result["skipped"].append("dry run — payload built and approved, not submitted")
+            return result
+
+        raw = await mcp.call_tool("place_option_order", payload)
+        error = parse_order_error(raw)
+        log_event("demonstration_order", symbol=SYMBOL, payload=payload,
+                  capital_at_risk=decision.get("estimated_capital_at_risk"),
+                  capital_basis=decision.get("capital_basis"), result=raw[:1500], error=error,
+                  validation_status=DEMONSTRATION_STATUS)
+        if error:
+            result["rejections"].append(f"rejected by Alpaca — {error}")
+            alert("order_rejected", agent="demonstration", symbol=SYMBOL, reason=error)
+            return result
+        alert("order_placed", agent="demonstration", symbol=SYMBOL,
+              capital_at_risk=decision.get("estimated_capital_at_risk"),
+              validation_status=DEMONSTRATION_STATUS)
+        result["submitted"] = True
+        return result

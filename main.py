@@ -61,6 +61,24 @@ async def _run_once(multi_agent: bool = False, provider: str = "anthropic") -> f
     return result["cost_usd"]
 
 
+async def _run_demonstration_once(submit: bool):
+    """One bounded, explicitly unvalidated trade. See agent/demonstration.py for why this
+    exists and ARCHITECTURE.md for the alternative that was rejected."""
+    await _manage_open_positions()
+    from agent.demonstration import run_cycle, DEMONSTRATION_STATUS
+    import json
+    print(f"Demonstration cycle ({'SUBMIT' if submit else 'dry run'}) — {DEMONSTRATION_STATUS}")
+    result = await run_cycle(dry_run=not submit)
+    if result["order"]:
+        print(json.dumps(result["order"], indent=2, default=str))
+    for skip in result["skipped"]:
+        print(f"  skipped: {skip}")
+    for rej in result["rejections"]:
+        print(f"  rejected: {rej}")
+    if result["submitted"]:
+        print("  SUBMITTED — this is an unvalidated demonstration, not an edge claim.")
+
+
 async def _run_deterministic_once():
     await _manage_open_positions()
     from agent.deterministic_agent import run_cycle
@@ -138,6 +156,14 @@ if __name__ == "__main__":
                          help="Just run position/order housekeeping (close positions that hit a "
                               "profit-take/stop-loss/near-expiration, cancel stale orders) and exit — "
                               "no new entries, no Anthropic API call.")
+    parser.add_argument("--demonstrate", action="store_true",
+                         help="Build the single bounded demonstration spread (see "
+                              "agent/demonstration.py) and run it through the full risk gate "
+                              "WITHOUT submitting. Requires DEMONSTRATION_MODE=true.")
+    parser.add_argument("--submit", action="store_true",
+                         help="With --demonstrate, actually place the order. Separate flag on "
+                              "purpose: the dry run is the default and submitting is a "
+                              "deliberate act.")
     args = parser.parse_args()
 
     if not CONFIG.alpaca_api_key:
@@ -154,6 +180,8 @@ if __name__ == "__main__":
                 asyncio.run(_manage_loop(args.interval))
             else:
                 asyncio.run(_manage_open_positions())
+        elif args.demonstrate:
+            asyncio.run(_run_demonstration_once(args.submit))
         elif args.deterministic:
             asyncio.run(_run_deterministic_once())
         elif args.loop:
