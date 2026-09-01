@@ -6,37 +6,43 @@ Read at session start. Updated at session end.
 
 ## Now — blocking, do in this order
 
+- [ ] **Place the demonstration spread**, in-session Wednesday, after operator review:
+      `DEMONSTRATION_MODE=true python main.py --demonstrate --submit`. Dry run is approved
+      at ~$423 capital at risk (SPY 758/753 put spread). Verify the fill, then confirm
+      `main.py --manage-only` closes it before Thursday 15:45 ET.
+- [ ] **Decide whether the demonstration trade is enough**, or whether a second one is
+      wanted on Thursday. Default is one and only one — that is what the mode enforces.
+- [ ] **Put `ANTHROPIC_API_KEY` in `.env`.** It is empty, so no LLM-driven cycle can run at
+      all, and the entry is judged on being an *AI* agent. The deterministic and
+      demonstration paths do not exercise the reasoning layer.
 - [ ] **Resolve the judging criteria.** lablab's page says $6,000 / four criteria; judge Tony
       Lee's own LinkedIn post and lablab's X post say $5,000 / "P&L and creativity or
       engagement". Ask in Discord `#ineedhelp`. Changes what the video and write-up optimise for.
-- [x] Fresh paper account created: PA314K6MBKHZ / 68068c02-619a-4002-8211-7a691c37a614, $100,000, zero history (2 Sep)
-      trades and is ineligible. Fund at exactly $100,000. Record the account ID somewhere
-      permanent — it goes on the submission form and P&L is judged from it.
-- [x] `GET /v2/account` → options_trading_level 3 confirmed, no PATCH needed (2 Sep)
-      configurations if not.
-- [ ] **Place one real two-leg defined-risk spread** through the exact order path we intend to
-      use. This is the live test of MCP issue #97. If it fails, fall back to direct REST POST
-      and confirm before building anything on top.
-- [ ] **Fix the per-trade capital deadlock.** `_estimate_capital_at_risk` returns strike × 100
-      for a short put; the per-trade cap is 8% of equity = $8,000. No cash-secured put on any
-      watchlist name can clear it. Either move to defined-risk spreads as the live structure
-      (preferred) or size the cap against genuine defined risk rather than notional.
-- [ ] **Replace the i.i.d. bootstrap with a moving-block bootstrap** in
-      `agent/backtest/metrics.py`. `STEP_DAYS=7` against `HOLD_DAYS=21` is ~67% overlap;
-      measured false-positive rate ~14% against a 2.5% nominal. Re-run the full validation
-      afterwards. Until this lands, no graveyard PASS may be quoted as validated.
+- [x] Fresh paper account created: PA314K6MBKHZ / 68068c02-619a-4002-8211-7a691c37a614, $100,000, zero history (1 Sep)
+- [x] `GET /v2/account` → options_trading_level 3 confirmed, no PATCH needed (1 Sep)
+- [x] Multi-leg order path proven end to end — MCP `place_option_order` accepts `legs`;
+      issue #97 is fixed in server 3.4.7, so the CLI fallback is not needed (1 Sep)
+- [x] Per-trade capital deadlock fixed — multi-leg orders priced as structures,
+      (width − credit) × 100 × qty, instead of notional per leg (1 Sep)
+- [x] Moving-block bootstrap landed; zero-edge false-positive rate measured 10.8% → 2.5% (1 Sep)
+- [x] Short-horizon profile added and run on SPY/QQQ/IWM — **nothing cleared** (1 Sep)
 
 ## Next
 
-- [ ] Add a short-horizon timing profile whose positions open Tue/Wed and close by Thu, so the
-      traded structure matches the 3.5-session judged window.
-- [ ] Add an economic-calendar gate: flat or explicitly long-gamma into NFP (08:30 ET Fri 4 Sep).
-- [ ] Remove `iron_condor` and `covered_call` from `STRATEGY_NAMES` until the naked-call gate
-      and `place_stock_order` conflict is resolved — right now they are offered to the LLM and
-      silently rejected every time.
+- [x] Short-horizon timing profile matching the judged window (`vertical_credit_spread_2d`) (1 Sep)
+- [x] Economic-calendar gate: flat into NFP — `agent/session_window.py`, logs its reason (1 Sep)
+- [x] `order_manager` reads `legs[].symbol` on an mleg parent (1 Sep)
+- [ ] Write up the 21 FAILs as the headline finding, not an apology. Three liquid ETFs, seven
+      structures, a bootstrap corrected from a measured 10.8% to 2.5% false-positive rate, and
+      nothing cleared. This is the entry's strongest claim.
+- [ ] Remove `iron_condor` and `covered_call` from `STRATEGY_NAMES` and both system prompts —
+      still offered to the LLM and still structurally unable to execute.
+- [ ] `reflection._find_entry_event` can't match an mleg entry (`inp["symbol"]` is absent), so
+      every close gets flagged as a process failure. Scan `inp["legs"]` too.
+- [ ] `_close_order_args` builds a single-leg close — closing one leg of a spread leaves a
+      naked short between fills. Needs an mleg close with `buy_to_close`/`sell_to_close`.
 - [ ] Make the portfolio-wide capital cap cumulative across cycles, not per-cycle.
-- [ ] Check `cancel_order_by_id`'s result — still unchecked after the other order-result fixes.
-- [ ] Label indicative-feed data as such everywhere it surfaces to the user or a judge.
+- [ ] Label indicative-feed data as such everywhere it surfaces to a user or a judge.
 - [ ] Add the conservative mark-to-market alongside Alpaca's simulated P&L.
 
 ## Later
