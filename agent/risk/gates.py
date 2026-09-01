@@ -13,6 +13,7 @@ from agent.config import CONFIG
 from agent.kill_switch import is_active as kill_switch_active, reason as kill_switch_reason
 from agent.backtest_evidence import load_cleared_symbols
 from agent.session_window import entries_blocked
+from agent.demonstration import demonstration_status, DEMONSTRATION_STATUS
 
 ORDER_TOOLS = {"place_stock_order", "place_option_order", "place_crypto_order"}
 _OCC_RE = re.compile(r"^([A-Z]{1,6})(\d{6})([CP])(\d{8})$")
@@ -30,6 +31,86 @@ def parse_occ_symbol(symbol: str):
         "option_type": "call" if cp == "C" else "put",
         "strike": int(strike_raw) / 1000.0,
     }
+
+
+def mleg_capital_at_risk(legs: list, qty: float, limit_price) -> tuple:
+    """Capital at risk for a paired, defined-risk multi-leg order: (dollars, explanation).
+
+    Returns (None, reason) when the structure cannot be shown to be defined-risk from the
+    payload alone, in which case the caller must reject rather than guess.
+
+    The per-leg estimator below is what deadlocked this account. It prices a short put at
+    strike * 100 -- the cash-secured requirement -- because a lone short leg really does carry
+    that exposure. But the legs of an mleg order fill together or not at all, so a bull put
+    spread's real worst case is the distance between its strikes less the credit taken in,
+    which for a 5-wide SPY spread is a few hundred dollars against the ~$75,000 the per-leg
+    model was charging it. Charging notional for defined risk didn't make the account safer;
+    it made every defined-risk structure unplaceable and left cash-secured puts -- which carry
+    that exposure for real -- as the only thing the gate would pass.
+
+    Width and credit both come from the order payload (strikes off the OCC symbols, net price
+    off limit_price), not from a caller's assertion, so there is nothing here for a model to
+    overstate.
+    """
+    parsed = []
+    for leg in legs:
+        p = parse_occ_symbol((leg.get("symbol") or "").strip())
+        if p is None:
+            return None, f"leg symbol {leg.get('symbol')!r} is not a recognizable OCC option symbol"
+        p["side"] = (leg.get("side") or "").lower()
+        if p["side"] not in ("buy", "sell"):
+            return None, f"leg {leg.get('symbol')} has side {leg.get('side')!r}; expected buy or sell"
+        parsed.append(p)
+
+    if len({p["expiration"] for p in parsed}) != 1:
+        return None, ("legs span more than one expiration; this gate only prices single-expiry "
+                      "defined-risk structures")
+
+    # Widest short-to-long distance within each option type is the structure's exposure.
+    widths = []
+    for option_type in ("put", "call"):
+        shorts = [p for p in parsed if p["option_type"] == option_type and p["side"] == "sell"]
+        longs = [p for p in parsed if p["option_type"] == option_type and p["side"] == "buy"]
+        if not shorts:
+            continue
+        if not longs:
+            return None, (f"short {option_type} leg has no long {option_type} leg in the same "
+                          f"order; this is an undefined-risk structure")
+        for short in shorts:
+            if option_type == "put":
+                cover = [l for l in longs if l["strike"] < short["strike"]]
+            else:
+                cover = [l for l in longs if l["strike"] > short["strike"]]
+            if not cover:
+                return None, (f"short {option_type} at {short['strike']} has no further-OTM long "
+                              f"{option_type} covering it; undefined risk")
+            nearest = min(cover, key=lambda l: abs(l["strike"] - short["strike"]))
+            widths.append(abs(short["strike"] - nearest["strike"]))
+
+    if limit_price in (None, ""):
+        return None, "multi-leg order has no limit_price; cannot price its worst case"
+    try:
+        net = float(limit_price)
+    except (TypeError, ValueError):
+        return None, f"limit_price {limit_price!r} is not a number"
+
+    # Alpaca's mleg convention (server docstring): positive limit_price = net debit paid,
+    # negative = net credit received.
+    if not widths:
+        # All long legs: the most that can be lost is what was paid for them.
+        if net <= 0:
+            return None, "all-long structure priced as a credit; refusing to price its risk"
+        return net * 100 * qty, f"debit paid {net:.2f} x 100 x {qty:g}"
+
+    width = max(widths)
+    credit = -net
+    if credit <= 0:
+        # A debit spread: worst case is the debit, already bounded.
+        return net * 100 * qty, f"debit paid {net:.2f} x 100 x {qty:g}"
+    if credit >= width:
+        return None, (f"net credit {credit:.2f} is not below the {width:.2f} spread width; "
+                      f"refusing an implausibly priced structure")
+    return (width - credit) * 100 * qty, f"({width:.2f} width - {credit:.2f} credit) x 100 x {qty:g}"
 
 
 def _estimate_capital_at_risk(option_type: str, side: str, strike: float, qty: float,
@@ -121,6 +202,104 @@ class RiskGate:
         permanently shrinking the real budget available to later, legitimate trades this cycle."""
         self.committed_this_cycle = max(0.0, self.committed_this_cycle - (amount or 0.0))
 
+    def _check_mleg(self, tool_input: dict) -> dict:
+        """Gate a multi-leg order as one structure rather than as loose legs.
+
+        The per-leg checks (OCC parse, DTE, validated symbol) still run on every leg -- a
+        spread built from one in-window leg and one four-month leg is not defined risk in any
+        useful sense. What changes is capital: it is computed once, from the structure, by
+        mleg_capital_at_risk.
+
+        Naked-call cover is read from the legs themselves here, which is exactly what
+        `covered_by_paired_long` forbids on the single-leg path -- and the difference is real,
+        not a relaxation. On the single-leg path the legs are separate orders that can fill
+        independently, so a claimed hedge may never exist; in an mleg order the legs fill
+        together or not at all, so a further-OTM long call in the same payload is structural
+        cover, verifiable from the payload without trusting anyone's assertion.
+        """
+        legs = tool_input.get("legs") or []
+        if not isinstance(legs, list) or not 2 <= len(legs) <= 4:
+            return self._reject(f"Multi-leg order must carry 2-4 legs; got {len(legs) if isinstance(legs, list) else legs!r}.")
+
+        raw_qty = tool_input.get("qty", 1)
+        if raw_qty is None or raw_qty == "":
+            raw_qty = 1
+        try:
+            qty = float(raw_qty)
+        except (TypeError, ValueError):
+            return self._reject(f"qty {tool_input.get('qty')!r} is not a number; refusing to submit.")
+        if qty <= 0:
+            return self._reject(f"qty must be positive (got {qty}); refusing to submit.")
+
+        roots = set()
+        for leg in legs:
+            if not isinstance(leg, dict):
+                return self._reject(f"Multi-leg leg {leg!r} is not an object; refusing to submit.")
+            leg_symbol = (leg.get("symbol") or "").strip()
+            parsed = parse_occ_symbol(leg_symbol)
+            if not parsed:
+                return self._reject(f"'{leg_symbol}' is not a recognizable OCC option symbol; refusing to submit.")
+            dte = (parsed["expiration"] - date.today()).days
+            if dte < CONFIG.min_days_to_expiration or dte > CONFIG.max_days_to_expiration:
+                return self._reject(
+                    f"{leg_symbol} has {dte} days to expiration; agent is restricted to "
+                    f"{CONFIG.min_days_to_expiration}-{CONFIG.max_days_to_expiration} DTE."
+                )
+            roots.add(parsed["root"])
+
+        if len(roots) != 1:
+            return self._reject(f"Multi-leg order spans several underlyings ({', '.join(sorted(roots))}); "
+                                 f"refusing to price a cross-underlying structure.")
+        root = roots.pop()
+
+        demo = demonstration_status(root, legs, qty)
+        if demo["blocked"]:
+            return self._reject(demo["blocked"])
+        if not demo["armed"] and CONFIG.require_backtest_validation and root not in load_cleared_symbols():
+            return self._reject(
+                f"{root} has no strategy that passed the backtest validation gate "
+                f"(see logs/backtest_report.json / docs/strategy_graveyard.md) — refusing to open "
+                f"a new position on an unproven symbol. Run run_backtest.py to check for updates, "
+                f"or pick a symbol that has cleared validation."
+            )
+
+        capital_at_risk, detail = mleg_capital_at_risk(legs, qty, tool_input.get("limit_price"))
+        if capital_at_risk is None:
+            return self._reject(f"Cannot establish defined risk for this multi-leg order: {detail}.")
+
+        held_this_cycle = self.held_option_roots | set(self.open_positions.keys()) | self.symbols_committed_this_cycle
+        if len({root} | held_this_cycle) > CONFIG.max_positions_open and root not in held_this_cycle:
+            return self._reject(f"Opening {root} would exceed the {CONFIG.max_positions_open}-position limit.")
+
+        max_per_trade = CONFIG.max_allocation_pct_per_trade * self.equity
+        if CONFIG.max_allocation_usd_per_trade > 0:
+            max_per_trade = min(max_per_trade, CONFIG.max_allocation_usd_per_trade)
+        if demo["armed"]:
+            max_per_trade = min(max_per_trade, demo["max_loss_cap"])
+        if capital_at_risk > max_per_trade:
+            return self._reject(
+                f"Estimated capital at risk ${capital_at_risk:,.0f} [{detail}] exceeds the per-trade "
+                f"cap ${max_per_trade:,.0f}."
+            )
+
+        max_total = CONFIG.max_total_options_allocation_pct * self.equity
+        if CONFIG.max_total_options_allocation_usd > 0:
+            max_total = min(max_total, CONFIG.max_total_options_allocation_usd)
+        if self.committed_this_cycle + capital_at_risk > max_total:
+            return self._reject(
+                f"This trade would push total options capital-at-risk this cycle to "
+                f"${self.committed_this_cycle + capital_at_risk:,.0f}, above the "
+                f"{CONFIG.max_total_options_allocation_pct:.0%} portfolio cap (${max_total:,.0f})."
+            )
+
+        self.committed_this_cycle += capital_at_risk
+        self.symbols_committed_this_cycle.add(root)
+        approved = {"approved": True, "estimated_capital_at_risk": round(capital_at_risk, 2),
+                    "capital_basis": detail}
+        if demo["armed"]:
+            approved["validation_status"] = DEMONSTRATION_STATUS
+        return approved
+
     def check(self, tool_name: str, tool_input: dict, covered_by_paired_long: bool = False) -> dict:
         """`covered_by_paired_long` must only be set by a caller that has already verified, from
         its own multi-leg strategy plan, that this specific short call is hedged by a
@@ -165,6 +344,9 @@ class RiskGate:
             return self._reject("Crypto orders are out of scope; this agent trades equity options only.")
 
         # tool_name == "place_option_order"
+        if tool_input.get("legs"):
+            return self._check_mleg(tool_input)
+
         symbol = tool_input.get("symbol", "")
         side = (tool_input.get("side") or "").lower()
         # Only a genuinely missing/None/empty qty defaults to 1 -- unlike the old `x or 1`, an
