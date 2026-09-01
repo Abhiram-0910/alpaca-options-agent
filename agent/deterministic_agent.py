@@ -172,6 +172,13 @@ async def run_cycle() -> dict:
             if not leg_orders:
                 continue
 
+            # Submit buy (protective) legs before sell legs. Legs aren't atomic — if only one
+            # side fills before the other, a buy-first ordering leaves a long option exposed
+            # (defined risk: max loss is the premium already paid) rather than a naked short
+            # (undefined/much larger risk) if the strategy's own leg list happened to put the
+            # sell leg first, which vertical_credit_spread and iron_condor both do.
+            leg_orders.sort(key=lambda pair: 0 if pair[0].side == "buy" else 1)
+
             placed = []
             for leg, real in leg_orders:
                 position_intent = "sell_to_open" if leg.side == "sell" else "buy_to_open"

@@ -59,12 +59,28 @@ async def _manage_positions(mcp) -> list:
     if not isinstance(positions, list):
         positions = []
 
+    # Symbols with an order still open right now (not yet stale enough for
+    # _cancel_stale_orders, which runs before this and only cancels orders older than
+    # STALE_ORDER_MINUTES). Without this check, a position whose close order hasn't
+    # filled yet gets ANOTHER close order submitted on top of it every single cycle —
+    # verified live: on an illiquid contract this resubmitted every ~10 seconds across
+    # manual test runs, and on a real --loop interval would do the same every cycle,
+    # unnecessarily crossing the spread again each time (the real cost of over-trading,
+    # even though Alpaca charges $0 commission on options).
+    open_orders_raw = await mcp.call_tool("get_orders", {"status": "open"})
+    open_orders = json.loads(open_orders_raw).get("data", {}).get("result", [])
+    symbols_with_open_orders = {o.get("symbol") for o in open_orders if isinstance(open_orders, list)} \
+        if isinstance(open_orders, list) else set()
+
     closed = []
     for pos in positions:
         symbol = pos.get("symbol", "")
         parsed = parse_occ_symbol(symbol)
         if not parsed:
             continue  # not an option leg (e.g. a covered-call's underlying shares) — leave alone
+
+        if symbol in symbols_with_open_orders:
+            continue  # already has a pending close order this cycle; let it fill or go stale first
 
         dte = (parsed["expiration"] - date.today()).days
         qty = abs(float(pos.get("qty", 0) or 0))

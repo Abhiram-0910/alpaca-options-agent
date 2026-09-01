@@ -281,8 +281,12 @@ async def run_cycle() -> dict:
                     "summary": f"Critic approved {proposal.get('symbol')}/{proposal.get('strategy')} but "
                                f"RiskGate rejected it: {'; '.join(rejections)}"}
 
+        # Submit buy (protective) legs before sell legs — same reasoning as
+        # deterministic_agent.py: legs aren't atomic, and the Proposer's own leg ordering in
+        # its proposal isn't something to trust for this, since a naked short between fills
+        # is a materially worse failure mode than a temporarily-orphaned long option.
         placed = []
-        for leg in approved_legs:
+        for leg in sorted(approved_legs, key=lambda l: 0 if l.get("side") == "buy" else 1):
             order_args = {
                 "symbol": leg["symbol"], "side": leg["side"], "qty": str(leg.get("qty", 1)),
                 "type": "limit" if leg.get("limit_price") else "market",
