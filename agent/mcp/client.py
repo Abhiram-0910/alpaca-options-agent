@@ -43,10 +43,16 @@ class AlpacaMCPClient:
         result = await self.session.list_tools()
         tools = []
         for t in result.tools:
+            # The MCP Python SDK renamed Tool.inputSchema -> Tool.input_schema. Reading only
+            # the old name raised AttributeError on every call under the installed SDK, which
+            # took out both LLM paths (live_agent, multi_agent) on their first MCP round trip
+            # -- the deterministic path never calls this, which is why it kept working and hid
+            # the break. Accept either spelling rather than pinning the SDK version.
+            schema = getattr(t, "input_schema", None) or getattr(t, "inputSchema", None)
             tools.append({
                 "name": t.name,
                 "description": t.description or "",
-                "input_schema": t.inputSchema or {"type": "object", "properties": {}},
+                "input_schema": schema or {"type": "object", "properties": {}},
             })
         return tools
 
