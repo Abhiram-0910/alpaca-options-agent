@@ -1,0 +1,7 @@
+.env
+.env.backup*
+__pycache__/
+*.pyc
+logs/
+.venv/
+ex.txt
