@@ -43,6 +43,18 @@ git worktree add ../alpaca-submission -b submission-materials
 
 ## 5. Environment
 
+Use `uv`, not `python3 -m venv` — on this box (WSL Ubuntu, Python 3.14.4) the stdlib venv's
+`ensurepip` step fails and leaves a venv with no `pip` in it.
+
+```bash
+uv venv --python 3.14 .venv
+uv pip install -r requirements.txt
+uv tool install alpaca-mcp-server   # warms the cache; otherwise the first
+                                     # uvx spawn downloads mid-cycle
+```
+
+Then run everything through `.venv/bin/python` (or activate the venv).
+
 ```bash
 cp .env.example .env
 ```
