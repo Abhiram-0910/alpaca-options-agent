@@ -46,8 +46,10 @@ async def _manage_open_positions():
 async def _run_once(multi_agent: bool = False, provider: str = "openai") -> float:
     await _manage_open_positions()
     if multi_agent:
-        from agent.multi_agent import run_cycle
-        print("Starting multi-agent cycle (Proposer -> Critic -> RiskGate)...")
+        from agent.multi_agent import run_cycle as _multi_run_cycle
+        from functools import partial
+        run_cycle = partial(_multi_run_cycle, provider)
+        print(f"Starting multi-agent cycle on {provider} (Proposer -> Critic -> RiskGate)...")
     elif provider == "openai":
         from agent.live_agent_openai import run_cycle
         print(f"Starting trading cycle (OpenAI, {CONFIG.openai_model})...")
@@ -59,6 +61,20 @@ async def _run_once(multi_agent: bool = False, provider: str = "openai") -> floa
           f"${result['cost_usd']:.4f} spent, {len(result['rejections'])} risk-gate/critic rejections.")
     print(f"\nAgent summary:\n{result['summary']}")
     return result["cost_usd"]
+
+
+def _require_api_key(provider: str) -> None:
+    """Fail at the argument check, not six MCP round trips into a cycle.
+
+    Applies to the Proposer/Critic path as well as the single-agent one: multi_agent runs on
+    either provider now, so a guard that only ever checked Anthropic would let
+    `--multi-agent --provider openai` through with no key and vice versa.
+    """
+    if provider == "openai" and not CONFIG.openai_api_key:
+        raise SystemExit("Set OPENAI_API_KEY in .env first (or use --deterministic to skip the LLM).")
+    if provider == "anthropic" and not CONFIG.anthropic_api_key:
+        raise SystemExit("Set ANTHROPIC_API_KEY in .env first, or pass --provider openai "
+                          "(or use --deterministic to skip the LLM entirely).")
 
 
 async def _run_demonstration_once(submit: bool):
@@ -148,7 +164,8 @@ if __name__ == "__main__":
                          help="Run one zero-LLM-cost cycle instead — no Anthropic API key needed.")
     parser.add_argument("--multi-agent", action="store_true",
                          help="Use the two-agent Proposer/Critic pipeline (agent/multi_agent.py) "
-                              "instead of the single-agent loop. Anthropic only. Combine with --once/--loop.")
+                              "instead of the single-agent loop. Runs on either provider. "
+                              "Combine with --once/--loop.")
     parser.add_argument("--provider", choices=["anthropic", "openai"], default="openai",
                          help="LLM provider for both the single-agent and Proposer/Critic paths. "
                               "Default: openai, because ANTHROPIC_API_KEY is not set on this "
@@ -186,20 +203,10 @@ if __name__ == "__main__":
         elif args.deterministic:
             asyncio.run(_run_deterministic_once())
         elif args.loop:
-            if args.multi_agent and not CONFIG.anthropic_api_key:
-                raise SystemExit("Set ANTHROPIC_API_KEY in .env first (--multi-agent is Anthropic-only).")
-            if args.provider == "openai" and not args.multi_agent and not CONFIG.openai_api_key:
-                raise SystemExit("Set OPENAI_API_KEY in .env first (or use --deterministic to skip the LLM).")
-            if args.provider == "anthropic" and not args.multi_agent and not CONFIG.anthropic_api_key:
-                raise SystemExit("Set ANTHROPIC_API_KEY in .env first (or use --deterministic to skip the LLM).")
+            _require_api_key(args.provider)
             asyncio.run(_run_loop(args.interval, args.max_spend, args.multi_agent, args.provider))
         else:
-            if args.multi_agent and not CONFIG.anthropic_api_key:
-                raise SystemExit("Set ANTHROPIC_API_KEY in .env first (--multi-agent is Anthropic-only).")
-            if args.provider == "openai" and not args.multi_agent and not CONFIG.openai_api_key:
-                raise SystemExit("Set OPENAI_API_KEY in .env first (or use --deterministic to skip the LLM).")
-            if args.provider == "anthropic" and not args.multi_agent and not CONFIG.anthropic_api_key:
-                raise SystemExit("Set ANTHROPIC_API_KEY in .env first (or use --deterministic to skip the LLM).")
+            _require_api_key(args.provider)
             asyncio.run(_run_once(args.multi_agent, args.provider))
     except TradingKilled as exc:
         raise SystemExit(str(exc))
