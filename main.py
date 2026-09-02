@@ -43,7 +43,7 @@ async def _manage_open_positions():
             print(f"  canceled stale order on {o['symbol']} (open {o['age_minutes']:.0f} min)")
 
 
-async def _run_once(multi_agent: bool = False, provider: str = "anthropic") -> float:
+async def _run_once(multi_agent: bool = False, provider: str = "openai") -> float:
     await _manage_open_positions()
     if multi_agent:
         from agent.multi_agent import run_cycle
@@ -111,7 +111,7 @@ async def _manage_loop(interval_minutes: int):
         await asyncio.sleep(interval_minutes * 60)
 
 
-async def _run_loop(interval_minutes: int, max_spend: float, multi_agent: bool = False, provider: str = "anthropic"):
+async def _run_loop(interval_minutes: int, max_spend: float, multi_agent: bool = False, provider: str = "openai"):
     session_spend = 0.0
     while True:
         if max_spend > 0 and session_spend >= max_spend:
@@ -149,9 +149,10 @@ if __name__ == "__main__":
     parser.add_argument("--multi-agent", action="store_true",
                          help="Use the two-agent Proposer/Critic pipeline (agent/multi_agent.py) "
                               "instead of the single-agent loop. Anthropic only. Combine with --once/--loop.")
-    parser.add_argument("--provider", choices=["anthropic", "openai"], default="anthropic",
-                         help="LLM provider for the single-agent path (ignored with --multi-agent, "
-                              "which is Anthropic-only). Default: anthropic.")
+    parser.add_argument("--provider", choices=["anthropic", "openai"], default="openai",
+                         help="LLM provider for both the single-agent and Proposer/Critic paths. "
+                              "Default: openai, because ANTHROPIC_API_KEY is not set on this "
+                              "deployment and a bare `python main.py --once` has to work.")
     parser.add_argument("--manage-only", action="store_true",
                          help="Just run position/order housekeeping (close positions that hit a "
                               "profit-take/stop-loss/near-expiration, cancel stale orders) and exit — "
