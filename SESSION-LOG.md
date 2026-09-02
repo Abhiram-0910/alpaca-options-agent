@@ -16,6 +16,40 @@ $430, gate-approved, **not submitted**.
 **Next:** operator triggers `DEMONSTRATION_MODE=true python main.py --demonstrate --submit`
 in-session. Then submission materials, which remain entirely undone with ~44 hours left.
 
+### 2 Sep 2026 — writeup drafted — *Antigravity*
+
+**Done**
+- Authored `submission/WRITEUP.md` rigorously adhering to writing-not-slop constraints and incorporating the key variance argument and 4 core measured numbers.
+
+**Incomplete**
+- `submission/demo/`, `submission/SCRIPT.md`, and `submission/slides/` remaining.
+
+### 2 Sep 2026 — demo dashboard built — *Antigravity*
+
+**Done**
+- Authored `submission/demo/index.html`, `style.css`, and `app.js` applying ui-ux-pro-max standard.
+- Features empty states, indicator for free-tier pricing, and symlinked logs loading.
+
+**Incomplete**
+- `submission/SCRIPT.md` and `submission/slides/` remaining.
+
+### 2 Sep 2026 — SCRIPT.md written — *Antigravity*
+
+**Done**
+- Written video script `submission/SCRIPT.md` targeting human speaker, 4.5m runtime. Includes problem, live veto, validation failure explanation, and demo trade rationale.
+
+**Incomplete**
+- `submission/slides/` remaining.
+
+### 2 Sep 2026 — slides created — *Antigravity*
+
+**Done**
+- Created `submission/slides/SLIDES.md` and generated `presentation.pdf` (pending task completion).
+- Generated a 16:9 cover image for the presentation.
+
+**Incomplete**
+- All submission materials are drafted. Awaiting final operator review before shipping.
+
 ## Sessions
 
 ### 2 Sep 2026 — make the LLM paths runnable, pin the demonstration expiry — *Claude Code*

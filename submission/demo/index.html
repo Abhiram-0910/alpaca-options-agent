@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpaca Options Agent | Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="banner">
+        <div class="banner-content">
+            <span class="icon">⚠️</span>
+            <p><strong>Notice:</strong> Options quotes are provided by Alpaca's free-tier Indicative Pricing Feed, not OPRA. Prices are simulated and not real-time NBBO.</p>
+        </div>
+    </div>
+
+    <header class="app-header">
+        <div class="container">
+            <h1>Alpaca Options Agent</h1>
+            <p class="subtitle">Deterministic Risk Enforcement & Validation Gate</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Account State Section -->
+        <section class="dashboard-section">
+            <header class="section-header">
+                <h2>Current Account State</h2>
+                <div class="status-indicator"></div>
+            </header>
+            <div id="account-container" class="card-grid">
+                <!-- Populated by JS -->
+                <div class="empty-state">No account data available.</div>
+            </div>
+        </section>
+
+        <!-- Risk Gate Decisions Section -->
+        <section class="dashboard-section">
+            <header class="section-header">
+                <h2>Risk Gate Decisions</h2>
+                <span class="badge danger">Strict Enforcement Active</span>
+            </header>
+            <div class="table-container">
+                <table id="risk-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Action</th>
+                            <th>Symbol</th>
+                            <th>Cap Risk Evaluated</th>
+                            <th>Status</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody id="risk-body">
+                        <!-- Populated by JS -->
+                        <tr><td colspan="6" class="empty-state">No risk decisions recorded yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Validation Graveyard Section -->
+        <section class="dashboard-section">
+            <header class="section-header">
+                <h2>Validation Graveyard</h2>
+                <span class="badge warning">21 of 21 Candidates Refused</span>
+            </header>
+            <p class="section-desc">The statistical validation gate refused all candidates evaluated using a moving-block bootstrap against a 2.5% nominal target.</p>
+            <div class="table-container">
+                <table id="validation-table">
+                    <thead>
+                        <tr>
+                            <th>Strategy</th>
+                            <th>Symbol</th>
+                            <th>Win Rate</th>
+                            <th>Sharpe</th>
+                            <th>Sharpe CI Lower Bound</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody id="validation-body">
+                        <!-- Populated by JS -->
+                        <tr><td colspan="6" class="empty-state">No validation records found.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>UNVALIDATED_DEMONSTRATION mode active. Agent executed strictly for logic demonstration.</p>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
