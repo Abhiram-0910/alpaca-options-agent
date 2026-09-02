@@ -19,6 +19,7 @@ one extra Claude call per cycle, not a multiple of it.
 import json
 
 from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from agent.config import CONFIG, assert_paper_trading
 from agent.mcp.client import AlpacaMCPClient
@@ -27,10 +28,12 @@ from agent.trade_log import log_event
 from agent.kill_switch import assert_not_killed
 from agent.alerts import alert
 from agent.llm_cost import call_cost
+from agent.openai_cost import call_cost as openai_call_cost
 from agent.backtest_evidence import load_backtest_summary, load_cleared_strategies
 from agent.mcp_parsers import parse_order_error
 from agent.reflection import summarize_for_prompt
 from agent.live_agent import STRATEGY_UNIVERSE
+from agent.live_agent_openai import _to_openai_tools
 
 
 def _call_leg_is_hedged(leg: dict, all_legs: list) -> bool:
@@ -211,6 +214,93 @@ async def _run_proposer(anthropic, mcp, tools, system_prompt) -> dict:
     return {"proposal": proposal, "tool_calls": tool_calls_made, "api_calls": api_calls_made, "cost_usd": cost}
 
 
+async def _run_proposer_openai(client, mcp, tools, system_prompt) -> dict:
+    """OpenAI counterpart of _run_proposer. Same prompt, same tool list, same privilege
+    separation -- `tools` still arrives with every order-placing tool already removed, so the
+    Proposer remains structurally incapable of trading whichever provider is behind it. Only
+    the wire format differs: chat.completions nests tool schemas under "function" and returns
+    tool calls with JSON-string arguments rather than parsed objects."""
+    account_raw = await mcp.call_tool("get_account_info", {})
+    positions_raw = await mcp.call_tool("get_all_positions", {})
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": (
+            "Begin this research cycle. Current account snapshot and positions (already fetched, "
+            f"no need to re-call those two tools):\n\nACCOUNT:\n{account_raw}\n\nPOSITIONS:\n{positions_raw}"
+            "\n\nResearch the watchlist and call propose_trade when you're done."
+        )},
+    ]
+    openai_tools = _to_openai_tools(tools)
+
+    tool_calls_made, api_calls_made, cost = 0, 0, 0.0
+    proposal = None
+    model = CONFIG.openai_proposer_model
+    while tool_calls_made < CONFIG.max_tool_calls_per_cycle:
+        response = await client.chat.completions.create(
+            model=model, messages=messages, tools=openai_tools, max_tokens=2048,
+        )
+        api_calls_made += 1
+        cost += openai_call_cost(response.usage, model)
+        msg = response.choices[0].message
+        messages.append(msg.model_dump(exclude_none=True))
+
+        if response.choices[0].finish_reason != "tool_calls" or not msg.tool_calls:
+            break
+
+        for tc in msg.tool_calls:
+            tool_calls_made += 1
+            try:
+                tool_input = json.loads(tc.function.arguments or "{}")
+            except json.JSONDecodeError:
+                # A malformed tool call is the model's problem to fix, not a reason to abort
+                # the cycle -- hand the error back and let it retry within its budget.
+                messages.append({"role": "tool", "tool_call_id": tc.id,
+                                  "content": f"Could not parse arguments: {tc.function.arguments!r}"})
+                continue
+            if tc.function.name == "propose_trade":
+                proposal = tool_input
+                messages.append({"role": "tool", "tool_call_id": tc.id, "content": "Proposal received."})
+                continue
+            result_text = await mcp.call_tool(tc.function.name, tool_input)
+            log_event("tool_call", agent="proposer", provider="openai", tool=tc.function.name,
+                      input=tool_input, result=result_text[:2000])
+            messages.append({"role": "tool", "tool_call_id": tc.id, "content": result_text})
+
+        if proposal is not None:
+            break
+
+    if proposal is None:
+        proposal = {"action": "skip", "rationale": "Proposer ran out of tool-call budget without proposing."}
+    return {"proposal": proposal, "tool_calls": tool_calls_made, "api_calls": api_calls_made, "cost_usd": cost}
+
+
+async def _run_critic_openai(client, proposal: dict, backtest_summary: str) -> dict:
+    content = (
+        f"Backtest evidence:\n{backtest_summary}\n\n"
+        f"Proposal:\n{json.dumps(proposal, indent=2)}\n\n"
+        "Review this proposal and call review_decision."
+    )
+    model = CONFIG.openai_critic_model
+    response = await client.chat.completions.create(
+        model=model, max_tokens=1024,
+        messages=[{"role": "system", "content": CRITIC_SYSTEM_PROMPT},
+                  {"role": "user", "content": content}],
+        tools=_to_openai_tools([REVIEW_DECISION_TOOL]),
+        tool_choice={"type": "function", "function": {"name": "review_decision"}},
+    )
+    cost = openai_call_cost(response.usage, model)
+    msg = response.choices[0].message
+    verdict = {"verdict": "reject", "rationale": "Critic gave no verdict."}
+    if msg.tool_calls:
+        try:
+            verdict = json.loads(msg.tool_calls[0].function.arguments or "{}") or verdict
+        except json.JSONDecodeError:
+            # Default stays "reject": an unreadable verdict is not an approval.
+            pass
+    return {"verdict": verdict, "cost_usd": cost}
+
+
 async def _run_critic(anthropic, proposal: dict, backtest_summary: str) -> dict:
     content = (
         f"Backtest evidence:\n{backtest_summary}\n\n"
@@ -228,21 +318,34 @@ async def _run_critic(anthropic, proposal: dict, backtest_summary: str) -> dict:
     return {"verdict": verdict, "cost_usd": cost}
 
 
-async def run_cycle() -> dict:
+async def run_cycle(provider: str = "openai") -> dict:
     assert_paper_trading()
     assert_not_killed()
 
     backtest_summary = load_backtest_summary()
     reflection_summary = summarize_for_prompt()
-    anthropic = AsyncAnthropic(api_key=CONFIG.anthropic_api_key)
+    if provider == "openai":
+        client = AsyncOpenAI(api_key=CONFIG.openai_api_key)
+        run_proposer, run_critic = _run_proposer_openai, _run_critic_openai
+        models = f"{CONFIG.openai_proposer_model} -> {CONFIG.openai_critic_model}"
+    else:
+        client = AsyncAnthropic(api_key=CONFIG.anthropic_api_key)
+        run_proposer, run_critic = _run_proposer, _run_critic
+        models = f"{CONFIG.claude_model} -> {CONFIG.claude_model}"
     risk_gate = RiskGate()
 
     async with AlpacaMCPClient() as mcp:
         all_tools = await mcp.list_tools_anthropic_format()
+        # The privilege separation, and the single most important line in this module: the
+        # Proposer's tool list has every order-placing tool removed before it is ever handed
+        # over, so it cannot trade whichever provider is behind it. This filter is what makes
+        # the split real rather than a prompt asking nicely.
         read_only_tools = [t for t in all_tools if t["name"] not in ORDER_TOOLS] + [PROPOSE_TRADE_TOOL]
+        log_event("multi_agent_cycle_start", provider=provider, models=models,
+                  order_tools_withheld=sorted(ORDER_TOOLS))
 
-        proposer_result = await _run_proposer(anthropic, mcp, read_only_tools,
-                                               _proposer_system_prompt(backtest_summary, reflection_summary))
+        proposer_result = await run_proposer(client, mcp, read_only_tools,
+                                              _proposer_system_prompt(backtest_summary, reflection_summary))
         proposal = proposer_result["proposal"]
         total_cost = proposer_result["cost_usd"]
         total_api_calls = proposer_result["api_calls"]
@@ -257,7 +360,7 @@ async def run_cycle() -> dict:
                     "cost_usd": round(total_cost, 5), "rejections": [],
                     "summary": f"Proposer chose to skip: {proposal.get('rationale', '')}"}
 
-        critic_result = await _run_critic(anthropic, proposal, backtest_summary)
+        critic_result = await run_critic(client, proposal, backtest_summary)
         total_cost += critic_result["cost_usd"]
         total_api_calls += 1
         verdict = critic_result["verdict"]

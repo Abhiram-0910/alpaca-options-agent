@@ -28,6 +28,15 @@ class Config:
 
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    # The Proposer/Critic split deliberately does NOT use one model for both roles. The Critic
+    # holds veto authority over a proposal that reaches a real account, so it must not be the
+    # cheaper model -- a reviewer that is weaker than what it reviews is decoration.
+    # gpt-4o rather than a newer frontier model on purpose: it is already price-verified in
+    # agent/openai_cost.py, so cycle cost stays measured rather than falling back to the
+    # gpt-4o-mini rate and silently under-reporting. Stronger models are available on this key
+    # (gpt-5.x, o3); using one means adding its verified price to that table first.
+    openai_proposer_model: str = os.getenv("OPENAI_PROPOSER_MODEL", "gpt-4o-mini")
+    openai_critic_model: str = os.getenv("OPENAI_CRITIC_MODEL", "gpt-4o")
 
     # Universe of underlyings the agent is allowed to trade options on. Kept liquid so
     # backtests and live option chain lookups stay fast. Widened from the original 8 after
