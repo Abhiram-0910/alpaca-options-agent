@@ -30,7 +30,7 @@ from agent.alerts import alert
 from agent.llm_cost import call_cost
 from agent.openai_cost import call_cost as openai_call_cost
 from agent.backtest_evidence import load_backtest_summary, load_cleared_strategies
-from agent.mcp_parsers import parse_order_error
+from agent.mcp_parsers import parse_order_error, clip_tool_result
 from agent.reflection import summarize_for_prompt
 from agent.live_agent import STRATEGY_UNIVERSE
 from agent.live_agent_openai import _to_openai_tools
@@ -164,6 +164,21 @@ validated setup for a weak reason — review it with the same scrutiny as a prop
 Call review_decision exactly once with your verdict."""
 
 
+# A Proposer that stops without calling propose_trade is not the same thing as a Proposer
+# that ran out of budget, and reporting the second when the first happened hides the failure.
+# Smaller models in particular end a turn with prose ("there is nothing to trade today")
+# instead of the tool call that says so structurally -- observed live on gpt-4o-mini, which
+# stopped at 13 of 25 tool calls. One nudge is enough to convert that into a real skip
+# proposal with a real rationale; without it the whole pipeline reports a skip nobody wrote.
+PROPOSE_NUDGE = ("You ended your turn without calling propose_trade. That tool call is the only "
+                 "way to hand off to the risk reviewer — prose is not read by anything "
+                 "downstream. Call propose_trade now, with action=\"skip\" and your reasoning if "
+                 "you do not want to trade this cycle, or action=\"trade\" with real OCC symbols "
+                 "if you do.")
+NO_PROPOSAL_BUDGET = "Proposer exhausted its tool-call budget without calling propose_trade."
+NO_PROPOSAL_SILENT = "Proposer ended its turn without calling propose_trade, even after a reminder."
+
+
 async def _run_proposer(anthropic, mcp, tools, system_prompt) -> dict:
     account_raw = await mcp.call_tool("get_account_info", {})
     positions_raw = await mcp.call_tool("get_all_positions", {})
@@ -178,7 +193,7 @@ async def _run_proposer(anthropic, mcp, tools, system_prompt) -> dict:
     }]
 
     tool_calls_made, api_calls_made, cost = 0, 0, 0.0
-    proposal = None
+    proposal, nudged = None, False
     while tool_calls_made < CONFIG.max_tool_calls_per_cycle:
         response = await anthropic.messages.create(
             model=CONFIG.claude_model, max_tokens=2048, system=system_prompt, tools=tools, messages=messages,
@@ -188,7 +203,11 @@ async def _run_proposer(anthropic, mcp, tools, system_prompt) -> dict:
         messages.append({"role": "assistant", "content": response.content})
 
         if response.stop_reason != "tool_use":
-            break
+            if nudged:
+                break
+            nudged = True
+            messages.append({"role": "user", "content": PROPOSE_NUDGE})
+            continue
 
         tool_results = []
         for block in response.content:
@@ -203,14 +222,19 @@ async def _run_proposer(anthropic, mcp, tools, system_prompt) -> dict:
             result_text = await mcp.call_tool(block.name, block.input)
             log_event("tool_call", agent="proposer", tool=block.name, input=block.input,
                       result=result_text[:2000])
-            tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": result_text})
+            tool_results.append({"type": "tool_result", "tool_use_id": block.id,
+                                 "content": clip_tool_result(result_text)})
 
         messages.append({"role": "user", "content": tool_results})
         if proposal is not None:
             break
 
     if proposal is None:
-        proposal = {"action": "skip", "rationale": "Proposer ran out of tool-call budget without proposing."}
+        exhausted = tool_calls_made >= CONFIG.max_tool_calls_per_cycle
+        proposal = {"action": "skip",
+                    "rationale": NO_PROPOSAL_BUDGET if exhausted else NO_PROPOSAL_SILENT}
+        log_event("proposer_no_proposal", tool_calls=tool_calls_made,
+                  budget=CONFIG.max_tool_calls_per_cycle, exhausted=exhausted)
     return {"proposal": proposal, "tool_calls": tool_calls_made, "api_calls": api_calls_made, "cost_usd": cost}
 
 
@@ -234,7 +258,7 @@ async def _run_proposer_openai(client, mcp, tools, system_prompt) -> dict:
     openai_tools = _to_openai_tools(tools)
 
     tool_calls_made, api_calls_made, cost = 0, 0, 0.0
-    proposal = None
+    proposal, nudged = None, False
     model = CONFIG.openai_proposer_model
     while tool_calls_made < CONFIG.max_tool_calls_per_cycle:
         response = await client.chat.completions.create(
@@ -246,7 +270,11 @@ async def _run_proposer_openai(client, mcp, tools, system_prompt) -> dict:
         messages.append(msg.model_dump(exclude_none=True))
 
         if response.choices[0].finish_reason != "tool_calls" or not msg.tool_calls:
-            break
+            if nudged:
+                break
+            nudged = True
+            messages.append({"role": "user", "content": PROPOSE_NUDGE})
+            continue
 
         for tc in msg.tool_calls:
             tool_calls_made += 1
@@ -265,13 +293,18 @@ async def _run_proposer_openai(client, mcp, tools, system_prompt) -> dict:
             result_text = await mcp.call_tool(tc.function.name, tool_input)
             log_event("tool_call", agent="proposer", provider="openai", tool=tc.function.name,
                       input=tool_input, result=result_text[:2000])
-            messages.append({"role": "tool", "tool_call_id": tc.id, "content": result_text})
+            messages.append({"role": "tool", "tool_call_id": tc.id,
+                              "content": clip_tool_result(result_text)})
 
         if proposal is not None:
             break
 
     if proposal is None:
-        proposal = {"action": "skip", "rationale": "Proposer ran out of tool-call budget without proposing."}
+        exhausted = tool_calls_made >= CONFIG.max_tool_calls_per_cycle
+        proposal = {"action": "skip",
+                    "rationale": NO_PROPOSAL_BUDGET if exhausted else NO_PROPOSAL_SILENT}
+        log_event("proposer_no_proposal", tool_calls=tool_calls_made,
+                  budget=CONFIG.max_tool_calls_per_cycle, exhausted=exhausted)
     return {"proposal": proposal, "tool_calls": tool_calls_made, "api_calls": api_calls_made, "cost_usd": cost}
 
 
