@@ -24,6 +24,8 @@ Rejected alternative: relaxing the gate's criteria after seeing that everything 
 is the exact post-hoc move the gate exists to prevent, and a reviewer would be right to
 discount every other number in this repo on the strength of it.
 """
+from datetime import date as _date
+
 from agent.config import CONFIG
 from agent.backtest_evidence import load_cleared_symbols
 
@@ -32,6 +34,26 @@ from agent.backtest_evidence import load_cleared_symbols
 DEMONSTRATION_STATUS = "UNVALIDATED_DEMONSTRATION"
 
 SYMBOL = "SPY"                    # deepest chain, daily expiries, tightest quotes available
+
+# Pinned rather than derived from a target DTE, because "nearest available expiry" silently
+# substitutes when the one you wanted isn't listed, and this trade happens once.
+#
+# Fri 4 Sep, not Thu 3 Sep. Entered Wednesday that is 2 DTE, matching the entry condition of
+# the hold_days=2 profile. Exited at the Thursday 15:45 flat rule it still has a day of time
+# value, so the position is closed as a spread rather than unwound at 0 DTE -- which would
+# mean the widest quotes of the week, live pin risk on the short leg, and reliance on paper's
+# assignment simulation, which docs/RESEARCH.md records as unverified and which Alpaca will
+# auto-exercise on $0.01 of intrinsic.
+#
+# The cost of choosing it: Friday's 08:30 NFP print keeps extrinsic value in a Friday expiry
+# through Thursday's close, so we buy the spread back richer than pure decay implies. That is
+# a known price paid to avoid pin risk, not an oversight. We never hold through the print --
+# the flat rule runs on wall clock and is unaffected by which expiry was chosen.
+#
+# Note the exit is one day earlier than the validated profile's own (which settles at
+# expiration on intrinsic). This is an UNVALIDATED_DEMONSTRATION regardless, so it does not
+# weaken a claim -- but it is not the profile either, and shouldn't be described as it.
+DEMONSTRATION_EXPIRY = _date(2026, 9, 4)
 MAX_CONTRACTS = 1
 MAX_OPEN_POSITIONS = 1
 MAX_LOSS_PCT_OF_NAV = 0.005       # 0.5% of NAV, roughly a tenth of the normal per-trade cap
@@ -135,7 +157,7 @@ async def run_cycle(dry_run: bool = True) -> dict:
     from agent.strategies import vertical_credit_spread
     from agent.mcp_parsers import parse_latest_trade_price, parse_bars_closes, parse_order_error
     from agent.live_chain import fetch_target_expiry_chain
-    from agent.deterministic_agent import _match_leg_to_real_chain, TARGET_DTE
+    from agent.deterministic_agent import _match_leg_to_real_chain
 
     assert_paper_trading()
     assert_not_killed()
@@ -183,13 +205,24 @@ async def run_cycle(dry_run: bool = True) -> dict:
             return result
 
         sigma = realized_vol(closes, window=20)
+        target_dte = (DEMONSTRATION_EXPIRY - date.today()).days
         target_expiry, chain = await fetch_target_expiry_chain(
-            mcp, SYMBOL, S, TARGET_DTE, CONFIG.min_days_to_expiration,
+            mcp, SYMBOL, S, target_dte, CONFIG.min_days_to_expiration,
             CONFIG.max_days_to_expiration, round(S * 0.85, 2), round(S * 1.02, 2))
         if not chain:
             result["skipped"].append(
                 f"no listed {SYMBOL} contracts in the {CONFIG.min_days_to_expiration}-"
                 f"{CONFIG.max_days_to_expiration} DTE window")
+            return result
+        # fetch_target_expiry_chain picks the *nearest* listed expiry to the target. For a
+        # one-shot trade, take the pinned expiry or take nothing -- quietly landing on the
+        # 3 Sep chain is the exact 0-DTE-at-exit outcome DEMONSTRATION_EXPIRY exists to avoid.
+        if target_expiry != DEMONSTRATION_EXPIRY:
+            result["skipped"].append(
+                f"{SYMBOL} chain offered {target_expiry} as the nearest expiry, not the pinned "
+                f"{DEMONSTRATION_EXPIRY}; skipping rather than substituting a different trade")
+            log_event("demonstration_skipped", reason=result["skipped"][-1],
+                      validation_status=DEMONSTRATION_STATUS)
             return result
 
         # Time to expiry from the expiry the chain returned, never a hardcoded constant:
@@ -202,18 +235,39 @@ async def run_cycle(dry_run: bool = True) -> dict:
             return result
 
         short = next(m for leg, m in zip(legs, matched) if leg.side == "sell")
-        long_ = next(m for leg, m in zip(legs, matched) if leg.side == "buy")
-        if long_.strike >= short.strike:
-            result["skipped"].append(
-                f"real-chain match put the protective leg at {long_.strike} against a short at "
-                f"{short.strike} — that is not a hedge, skipping rather than submitting it")
-            return result
 
-        # Shade the mid credit to buy fill probability. These are indicative-feed marks, not
-        # OPRA, so the mid is an estimate to begin with; a demonstration that never fills
-        # demonstrates nothing, and giving up a tenth of the credit on a $380 position costs
-        # less than the information does.
-        credit = max(round((short.price - long_.price) * 0.9, 2), 0.01)
+        # Pick the protective leg to fit the risk budget rather than to hit a delta.
+        #
+        # The strategy function targets 30-delta short / 15-delta long, and on a 2-DTE SPY
+        # chain those land ~6 points apart, for a max loss of $519 against this mode's hard
+        # $500 cap -- so delta-matching proposes a trade the gate must refuse. Narrowing the
+        # spread to fit a risk budget is what sizing to a budget means; widening the budget to
+        # fit the spread is not. The cap does not move.
+        #
+        # Widest candidate that still fits, because within a fixed max loss the wider spread
+        # collects the larger credit.
+        cap = MAX_LOSS_PCT_OF_NAV * (risk_gate.equity or 100_000)
+        candidates = []
+        for quote in chain:
+            if quote.option_type != "put" or quote.strike >= short.strike:
+                continue
+            shaded = max(round((short.price - quote.price) * 0.9, 2), 0.01)
+            max_loss = (short.strike - quote.strike - shaded) * 100 * MAX_CONTRACTS
+            if 0 < max_loss <= cap:
+                candidates.append((short.strike - quote.strike, quote, shaded))
+        if not candidates:
+            result["skipped"].append(
+                f"no {SYMBOL} {target_expiry} put below {short.strike} makes a spread inside the "
+                f"${cap:,.0f} demonstration cap; skipping rather than widening the cap")
+            log_event("demonstration_skipped", reason=result["skipped"][-1],
+                      validation_status=DEMONSTRATION_STATUS)
+            return result
+        _, long_, credit = max(candidates, key=lambda c: c[0])
+
+        # `credit` shades the mid by 10% to buy fill probability. These are indicative-feed
+        # marks, not OPRA, so the mid is an estimate to begin with; a demonstration that never
+        # fills demonstrates nothing, and giving up a tenth of the credit on a sub-$500
+        # position costs less than the information does.
         payload = {
             "qty": str(MAX_CONTRACTS),
             "type": "limit",
