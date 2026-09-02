@@ -6,15 +6,14 @@ Read at session start. Updated at session end.
 
 ## Now — blocking, do in this order
 
-- [ ] **Place the demonstration spread**, in-session Wednesday, after operator review:
-      `DEMONSTRATION_MODE=true python main.py --demonstrate --submit`. Dry run is approved
-      at ~$423 capital at risk (SPY 758/753 put spread). Verify the fill, then confirm
-      `main.py --manage-only` closes it before Thursday 15:45 ET.
+- [ ] **Place the demonstration spread**, in-session, after operator review:
+      `DEMONSTRATION_MODE=true python main.py --demonstrate --submit`. Dry run approved at
+      $430 capital at risk — sell SPY 756P / buy 751P expiring **4 Sep**, 0.70 credit. Verify
+      the fill, then confirm `main.py --manage-only` closes it before Thursday 15:45 ET.
 - [ ] **Decide whether the demonstration trade is enough**, or whether a second one is
       wanted on Thursday. Default is one and only one — that is what the mode enforces.
-- [ ] **Put `ANTHROPIC_API_KEY` in `.env`.** It is empty, so no LLM-driven cycle can run at
-      all, and the entry is judged on being an *AI* agent. The deterministic and
-      demonstration paths do not exercise the reasoning layer.
+- [x] LLM paths run on OpenAI — `--provider` defaults to openai, `multi_agent` is
+      provider-aware (Proposer gpt-4o-mini, Critic gpt-4o), both cycles verified live (2 Sep)
 - [ ] **Resolve the judging criteria.** lablab's page says $6,000 / four criteria; judge Tony
       Lee's own LinkedIn post and lablab's X post say $5,000 / "P&L and creativity or
       engagement". Ask in Discord `#ineedhelp`. Changes what the video and write-up optimise for.

@@ -6,18 +6,62 @@ Updated at the end of every session, read at the start. Newest entry at the top.
 
 ## Current state
 
-**Updated:** 1 Sep 2026, 21:15 IST
+**Updated:** 2 Sep 2026, 15:05 IST
 **Branch:** main
-**Agents active:** Claude Code (code), second agent (submission materials) — not yet started
-**Status:** Repo runs again, order path proven, capital deadlock fixed. **The validation gate
-has cleared nothing** — SPY, QQQ and IWM against seven structures, 21 FAILs. That is the
-headline finding, not a setback. Demonstration mode is built and dry-run-approved but has
-placed nothing.
-**Next:** submit the demonstration spread in-session Wednesday (`main.py --demonstrate
---submit`, requires operator review first), then the submission materials, which remain
-entirely undone.
+**Agents active:** Claude Code (code), second agent (submission materials) — still not started
+**Status:** Both LLM paths run on OpenAI. The Proposer/Critic pipeline works end to end and
+vetoed a real proposal on correct grounds. The validation gate still clears nothing — that
+remains the headline finding. Demonstration spread is pinned to the 4 Sep expiry, sized to
+$430, gate-approved, **not submitted**.
+**Next:** operator triggers `DEMONSTRATION_MODE=true python main.py --demonstrate --submit`
+in-session. Then submission materials, which remain entirely undone with ~44 hours left.
 
 ## Sessions
+
+### 2 Sep 2026 — make the LLM paths runnable, pin the demonstration expiry — *Claude Code*
+
+**Done**
+- `--provider` defaults to `openai`; `ANTHROPIC_API_KEY` is empty and staying that way.
+- `multi_agent` is provider-aware. Privilege separation unchanged — the Proposer's tool list
+  still has every order-placing tool removed, and the cycle now logs which were withheld.
+  Proposer `gpt-4o-mini`, Critic `gpt-4o`: the veto holder is not the cheaper model.
+- Credential guard covers the multi-agent path and both providers, at the argument check.
+- Demonstration expiry pinned to **4 Sep**, and the protective leg is now chosen as the
+  widest strike fitting the $500 cap rather than by delta.
+
+**Decided**
+- Critic runs `gpt-4o`, not a gpt-5.x model. Both are on the key, but only gpt-4o is
+  price-verified in `openai_cost.py`; an unpriced model silently falls back to the
+  gpt-4o-mini rate and under-reports cycle cost. Using a stronger one means adding its
+  verified price first.
+- 4 Sep over 3 Sep for the demonstration, accepting a known cost: Friday's NFP keeps
+  extrinsic value in a Friday expiry through Thursday's close, so we buy the spread back
+  richer than pure decay implies. Paid deliberately to avoid unwinding at 0 DTE — widest
+  quotes of the week, live pin risk, and paper's unverified assignment simulation.
+
+**Hit**
+- **`python main.py --once` could not complete a cycle at all.** Tool results were appended
+  to the conversation whole; one SPY `get_option_chain` is ~500KB, so a few chain reads hit
+  *"your messages resulted in 149721 tokens"* against a 128K limit. Affected both providers.
+  Fixed with `clip_tool_result`, which bounds only what a model sees — parsers still get the
+  full string.
+- **The Proposer never proposed.** It ended its turn with prose at 13 of 25 tool calls and
+  the pipeline reported "ran out of tool-call budget", which was false. One nudge fixed it;
+  the two failure modes are now distinct and logged.
+- **Delta-matched strikes did not fit the risk cap.** On a 2-DTE SPY chain the 30/15-delta
+  legs land 6 points apart — $519 max loss against the hard $500 cap, correctly refused. The
+  cap did not move; the spread narrowed.
+
+**Verified**
+- Single-agent OpenAI cycle completes and declines to trade pre-open.
+- Proposer/Critic cycle completes: Proposer put up MSFT `cash_secured_put`, Critic **vetoed**
+  it for citing no backtest evidence on a symbol that never cleared the gate. $0.022/cycle.
+- Account after both cycles: **0 positions, 0 live orders.** The only two orders on record are
+  yesterday's cancelled probes. The risk gate held with no strategy cleared.
+
+**Incomplete**
+- No order placed. Demonstration payload is built, gate-approved and awaiting the operator.
+- Submission materials: still entirely undone.
 
 ### 1 Sep 2026 — fix the order path, retarget the horizon, run the gate — *Claude Code*
 
