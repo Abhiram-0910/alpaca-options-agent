@@ -178,6 +178,10 @@ if __name__ == "__main__":
                          help="Build the single bounded demonstration spread (see "
                               "agent/demonstration.py) and run it through the full risk gate "
                               "WITHOUT submitting. Requires DEMONSTRATION_MODE=true.")
+    parser.add_argument("--export-dashboard", action="store_true",
+                         help="Just write logs/dashboard.json from the existing logs and exit. "
+                              "The file is refreshed after every other mode anyway; this is for "
+                              "regenerating it without running a cycle.")
     parser.add_argument("--submit", action="store_true",
                          help="With --demonstrate, actually place the order. Separate flag on "
                               "purpose: the dry run is the default and submitting is a "
@@ -191,6 +195,13 @@ if __name__ == "__main__":
             "ALPACA_PAPER_TRADE is not true. This project is built and risk-validated for "
             "Alpaca's PAPER trading environment only — refusing to start."
         )
+
+    from agent.dashboard import export_dashboard
+
+    if args.export_dashboard:
+        export_dashboard()
+        print("Wrote logs/dashboard.json")
+        raise SystemExit(0)
 
     try:
         if args.manage_only:
@@ -210,3 +221,12 @@ if __name__ == "__main__":
             asyncio.run(_run_once(args.multi_agent, args.provider))
     except TradingKilled as exc:
         raise SystemExit(str(exc))
+    finally:
+        # Refresh the dashboard snapshot whatever the cycle did, including when it failed --
+        # a dashboard that silently keeps showing the last successful run is worse than one
+        # showing a stale timestamp the reader can see. export_dashboard never raises on
+        # missing inputs, but a failure here must not mask the real exception either.
+        try:
+            export_dashboard()
+        except Exception as exc:  # pragma: no cover - belt and braces
+            print(f"Could not refresh logs/dashboard.json: {exc}")

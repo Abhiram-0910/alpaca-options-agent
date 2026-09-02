@@ -1,0 +1,780 @@
+{
+  "schema_version": 1,
+  "meta": {
+    "generated_at": "2026-09-02T10:22:49.998403+00:00",
+    "data_feed": "Alpaca Indicative Pricing Feed, not OPRA",
+    "engine_commit": "a69cf19",
+    "paper_trading": true,
+    "bootstrap": {
+      "method": "percentile bootstrap; circular moving-block where trades overlap",
+      "n_boot": 2000,
+      "ci": 0.95,
+      "seed": 42,
+      "block_size_by_strategy": {
+        "cash_secured_put": 3,
+        "covered_call": 3,
+        "long_directional": 3,
+        "vertical_credit_spread": 3,
+        "iron_condor": 3,
+        "iron_condor_vrp_45_21": 7,
+        "vertical_credit_spread_2d": 1
+      }
+    },
+    "backtest_report_generated_at": "2026-09-01T20:53:46.519680+00:00",
+    "distinct_pairs_evaluated": 21,
+    "total_validation_records": 24,
+    "pairs_cleared": 0,
+    "pairs_passing_primary_gate": 1
+  },
+  "account": {
+    "equity": 100000.0,
+    "last_equity": 100000.0,
+    "buying_power": 400000.0,
+    "options_buying_power": 100000.0,
+    "open_position_count": 0,
+    "account_number": "PA314K6MBKHZ",
+    "timestamp": "2026-09-02T10:22:48.336159+00:00",
+    "error": null
+  },
+  "validation": [
+    {
+      "symbol": "SPY",
+      "strategy": "cash_secured_put",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.4699,
+      "sharpe": 1.33,
+      "mean_return_pct": 0.00137,
+      "total_pnl_dollars": 5204.51,
+      "mean_return_ci": {
+        "lower": -0.000975765297511588,
+        "upper": 0.003930958510993224
+      },
+      "sharpe_ci": {
+        "lower": -1.0756951784172277,
+        "upper": 3.5043875677336054
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.00098, 0.00393) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-1.076, 3.504) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "SPY",
+      "strategy": "covered_call",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.3976,
+      "sharpe": 1.878,
+      "mean_return_pct": 0.00525,
+      "total_pnl_dollars": 23202.53,
+      "mean_return_ci": {
+        "lower": -0.000544336623505461,
+        "upper": 0.011784169389762789
+      },
+      "sharpe_ci": {
+        "lower": -0.23532064483662934,
+        "upper": 3.887000428239796
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.00054, 0.01178) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-0.235, 3.887) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "SPY",
+      "strategy": "long_directional",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.1566,
+      "sharpe": -2.008,
+      "mean_return_pct": -0.25576,
+      "total_pnl_dollars": -14799.23,
+      "mean_return_ci": {
+        "lower": -0.5319224209681881,
+        "upper": 0.05520688600647016
+      },
+      "sharpe_ci": {
+        "lower": -7.176742402484835,
+        "upper": 0.3628367066914111
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.53192, 0.05521) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-7.177, 0.363) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "SPY",
+      "strategy": "vertical_credit_spread",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.4458,
+      "sharpe": -0.89,
+      "mean_return_pct": -0.03284,
+      "total_pnl_dollars": 541.99,
+      "mean_return_ci": {
+        "lower": -0.1071880204866665,
+        "upper": 0.04485925733187904
+      },
+      "sharpe_ci": {
+        "lower": -2.756556708228968,
+        "upper": 1.3543367139577362
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.10719, 0.04486) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-2.757, 1.354) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "SPY",
+      "strategy": "iron_condor",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.4096,
+      "sharpe": 1.099,
+      "mean_return_pct": 0.03017,
+      "total_pnl_dollars": 3961.4,
+      "mean_return_ci": {
+        "lower": -0.03392370901025249,
+        "upper": 0.09307086608273445
+      },
+      "sharpe_ci": {
+        "lower": -1.1118307828700333,
+        "upper": 3.989666313272166
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.03392, 0.09307) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-1.112, 3.99) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "SPY",
+      "strategy": "iron_condor_vrp_45_21",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 76,
+      "win_rate": 0.5921,
+      "sharpe": -2.191,
+      "mean_return_pct": -0.07225,
+      "total_pnl_dollars": -3640.3,
+      "mean_return_ci": {
+        "lower": -0.1811613099924125,
+        "upper": 0.02919427467771023
+      },
+      "sharpe_ci": {
+        "lower": -4.831336538910494,
+        "upper": 1.3676827171348445
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.18116, 0.02919) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-4.831, 1.368) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "SPY",
+      "strategy": "vertical_credit_spread_2d",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 85,
+      "win_rate": 0.7765,
+      "sharpe": 1.665,
+      "mean_return_pct": 0.07493,
+      "total_pnl_dollars": 2941.79,
+      "mean_return_ci": {
+        "lower": -0.01642369723229903,
+        "upper": 0.1576740633588884
+      },
+      "sharpe_ci": {
+        "lower": -0.32285505450145596,
+        "upper": 4.398575127775157
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.01642, 0.15767) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-0.323, 4.399) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "QQQ",
+      "strategy": "cash_secured_put",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.5181,
+      "sharpe": 1.596,
+      "mean_return_pct": 0.00209,
+      "total_pnl_dollars": 7387.05,
+      "mean_return_ci": {
+        "lower": -0.0007047009573865028,
+        "upper": 0.005208229961920532
+      },
+      "sharpe_ci": {
+        "lower": -0.5664430153002661,
+        "upper": 3.935346808924957
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.0007, 0.00521) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-0.566, 3.935) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "QQQ",
+      "strategy": "covered_call",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.4819,
+      "sharpe": 2.293,
+      "mean_return_pct": 0.00943,
+      "total_pnl_dollars": 35542.24,
+      "mean_return_ci": {
+        "lower": -0.0002781853972004,
+        "upper": 0.020249607927888276
+      },
+      "sharpe_ci": {
+        "lower": -0.07744197351444565,
+        "upper": 4.43304987161793
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.00028, 0.02025) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-0.077, 4.433) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "QQQ",
+      "strategy": "long_directional",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.2289,
+      "sharpe": 0.456,
+      "mean_return_pct": 0.09439,
+      "total_pnl_dollars": 530.86,
+      "mean_return_ci": {
+        "lower": -0.3573810962665321,
+        "upper": 0.6408436722670908
+      },
+      "sharpe_ci": {
+        "lower": -2.4874266502718427,
+        "upper": 2.5162644350487304
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.35738, 0.64084) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-2.487, 2.516) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "QQQ",
+      "strategy": "vertical_credit_spread",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.494,
+      "sharpe": 0.056,
+      "mean_return_pct": 0.00205,
+      "total_pnl_dollars": 1398.78,
+      "mean_return_ci": {
+        "lower": -0.07897121938835484,
+        "upper": 0.08604638907235847
+      },
+      "sharpe_ci": {
+        "lower": -2.1190001735763193,
+        "upper": 2.5361067691865014
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.07897, 0.08605) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-2.119, 2.536) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "QQQ",
+      "strategy": "iron_condor",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.3133,
+      "sharpe": -0.056,
+      "mean_return_pct": -0.00135,
+      "total_pnl_dollars": 1400.48,
+      "mean_return_ci": {
+        "lower": -0.054690432674609275,
+        "upper": 0.053871582668531
+      },
+      "sharpe_ci": {
+        "lower": -2.240155139223316,
+        "upper": 2.4670408012328684
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.05469, 0.05387) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-2.24, 2.467) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "QQQ",
+      "strategy": "iron_condor_vrp_45_21",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 76,
+      "win_rate": 0.5921,
+      "sharpe": -2.65,
+      "mean_return_pct": -0.09088,
+      "total_pnl_dollars": -6676.37,
+      "mean_return_ci": {
+        "lower": -0.20134197619587577,
+        "upper": 0.01382395116591456
+      },
+      "sharpe_ci": {
+        "lower": -5.313442224302518,
+        "upper": 0.5464964083215109
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.20134, 0.01382) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-5.313, 0.546) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "QQQ",
+      "strategy": "vertical_credit_spread_2d",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 85,
+      "win_rate": 0.8118,
+      "sharpe": 1.812,
+      "mean_return_pct": 0.08423,
+      "total_pnl_dollars": 3449.94,
+      "mean_return_ci": {
+        "lower": -0.008942025347996234,
+        "upper": 0.17246078281330054
+      },
+      "sharpe_ci": {
+        "lower": -0.1656411035407651,
+        "upper": 4.719138077012555
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.00894, 0.17246) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-0.166, 4.719) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "IWM",
+      "strategy": "cash_secured_put",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.506,
+      "sharpe": 1.901,
+      "mean_return_pct": 0.00251,
+      "total_pnl_dollars": 4226.74,
+      "mean_return_ci": {
+        "lower": -0.0005910736415747922,
+        "upper": 0.005828650039900658
+      },
+      "sharpe_ci": {
+        "lower": -0.42976485577919554,
+        "upper": 4.703181498643302
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.00059, 0.00583) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-0.43, 4.703) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "IWM",
+      "strategy": "covered_call",
+      "scope": "primary",
+      "passed": true,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.4699,
+      "sharpe": 2.667,
+      "mean_return_pct": 0.01009,
+      "total_pnl_dollars": 17331.47,
+      "mean_return_ci": {
+        "lower": 0.0013779143390849342,
+        "upper": 0.019537497513677914
+      },
+      "sharpe_ci": {
+        "lower": 0.42611698640160667,
+        "upper": 4.944818918272065
+      },
+      "reasons": []
+    },
+    {
+      "symbol": "IWM",
+      "strategy": "covered_call",
+      "scope": "extended",
+      "passed": false,
+      "enabled_for_paper": null,
+      "trades": 211,
+      "win_rate": 0.4408,
+      "sharpe": 3.337,
+      "mean_return_pct": 0.00801,
+      "total_pnl_dollars": 31034.0,
+      "mean_return_ci": {
+        "lower": null,
+        "upper": null
+      },
+      "sharpe_ci": {
+        "lower": null,
+        "upper": null
+      },
+      "reasons": []
+    },
+    {
+      "symbol": "IWM",
+      "strategy": "covered_call",
+      "scope": "sub_period_first_half",
+      "passed": false,
+      "enabled_for_paper": null,
+      "trades": null,
+      "win_rate": null,
+      "sharpe": 1.706,
+      "mean_return_pct": 0.0059,
+      "total_pnl_dollars": null,
+      "mean_return_ci": {
+        "lower": null,
+        "upper": null
+      },
+      "sharpe_ci": {
+        "lower": null,
+        "upper": null
+      },
+      "reasons": [
+        "first half of history fails validation on its own: mean-return 95% bootstrap CI (-0.00242, 0.01452) does not exclude zero (lower bound must be > 0); Sharpe 95% bootstrap CI (-0.797, 3.927) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "IWM",
+      "strategy": "covered_call",
+      "scope": "sub_period_second_half",
+      "passed": true,
+      "enabled_for_paper": null,
+      "trades": null,
+      "win_rate": null,
+      "sharpe": 3.045,
+      "mean_return_pct": 0.01009,
+      "total_pnl_dollars": null,
+      "mean_return_ci": {
+        "lower": null,
+        "upper": null
+      },
+      "sharpe_ci": {
+        "lower": null,
+        "upper": null
+      },
+      "reasons": []
+    },
+    {
+      "symbol": "IWM",
+      "strategy": "long_directional",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.0964,
+      "sharpe": -2.062,
+      "mean_return_pct": -0.29561,
+      "total_pnl_dollars": -10262.03,
+      "mean_return_ci": {
+        "lower": -0.5430073193736896,
+        "upper": -0.0014269933189239538
+      },
+      "sharpe_ci": {
+        "lower": -7.073565561881425,
+        "upper": -0.007547613644943224
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.54301, -0.00143) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-7.074, -0.008) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "IWM",
+      "strategy": "vertical_credit_spread",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.494,
+      "sharpe": 0.615,
+      "mean_return_pct": 0.0208,
+      "total_pnl_dollars": 1744.85,
+      "mean_return_ci": {
+        "lower": -0.05934708053602361,
+        "upper": 0.09853100516857594
+      },
+      "sharpe_ci": {
+        "lower": -1.706059989102246,
+        "upper": 3.240019295288075
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.05935, 0.09853) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-1.706, 3.24) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "IWM",
+      "strategy": "iron_condor",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 83,
+      "win_rate": 0.3735,
+      "sharpe": 0.236,
+      "mean_return_pct": 0.00619,
+      "total_pnl_dollars": 1320.24,
+      "mean_return_ci": {
+        "lower": -0.05773060574754821,
+        "upper": 0.06909596679460245
+      },
+      "sharpe_ci": {
+        "lower": -2.0756114854180607,
+        "upper": 2.932344636955058
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.05773, 0.0691) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-2.076, 2.932) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "IWM",
+      "strategy": "iron_condor_vrp_45_21",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 76,
+      "win_rate": 0.5921,
+      "sharpe": -2.541,
+      "mean_return_pct": -0.08527,
+      "total_pnl_dollars": -2647.73,
+      "mean_return_ci": {
+        "lower": -0.19122419400135504,
+        "upper": 0.011485319777622885
+      },
+      "sharpe_ci": {
+        "lower": -4.911340411874594,
+        "upper": 0.48457528382779075
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.19122, 0.01149) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-4.911, 0.485) does not exclude zero (lower bound must be > 0)"
+      ]
+    },
+    {
+      "symbol": "IWM",
+      "strategy": "vertical_credit_spread_2d",
+      "scope": "primary",
+      "passed": false,
+      "enabled_for_paper": false,
+      "trades": 85,
+      "win_rate": 0.7647,
+      "sharpe": 1.665,
+      "mean_return_pct": 0.07326,
+      "total_pnl_dollars": 1415.28,
+      "mean_return_ci": {
+        "lower": -0.01312113715283722,
+        "upper": 0.15924643158052343
+      },
+      "sharpe_ci": {
+        "lower": -0.26312216059023513,
+        "upper": 4.566117187163153
+      },
+      "reasons": [
+        "mean-return 95% bootstrap CI (-0.01312, 0.15925) does not exclude zero (lower bound must be > 0)",
+        "Sharpe 95% bootstrap CI (-0.263, 4.566) does not exclude zero (lower bound must be > 0)"
+      ]
+    }
+  ],
+  "gate_decisions": [
+    {
+      "ts": "2026-09-02T09:16:42.086617+00:00",
+      "approved": false,
+      "tool": "place_option_order",
+      "agent": "demonstration",
+      "reason": "Estimated capital at risk $519 [(6.00 width - 0.81 credit) x 100 x 1] exceeds the per-trade cap $500.",
+      "estimated_capital_at_risk": null,
+      "validation_status": "UNVALIDATED_DEMONSTRATION",
+      "symbol": "SPY260904P00750000"
+    },
+    {
+      "ts": "2026-09-02T09:20:38.126141+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:20:37.759819+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:20:34.567185+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:20:34.253044+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:20:33.930139+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:20:33.616911+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:20:29.099992+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:20:28.788358+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:20:28.358482+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:20:28.004790+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:20:27.611652+00:00",
+      "approved": true,
+      "tool": "get_stock_latest_quote",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:18:18.907007+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:18:18.394947+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:18:17.893196+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:18:17.415419+00:00",
+      "approved": true,
+      "tool": "get_option_chain",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    },
+    {
+      "ts": "2026-09-02T09:18:16.439059+00:00",
+      "approved": true,
+      "tool": "get_stock_latest_quote",
+      "agent": "openai",
+      "reason": null,
+      "estimated_capital_at_risk": null,
+      "validation_status": null,
+      "symbol": null
+    }
+  ],
+  "trades": []
+}
