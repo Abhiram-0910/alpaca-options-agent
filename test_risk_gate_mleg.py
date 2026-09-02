@@ -105,7 +105,17 @@ def demo() -> None:
         ]:
             d = _gate().check("place_option_order", payload)
             assert not d["approved"], f"{name} should have been refused: {d}"
+            # The capital figure has to survive a rejection, not just an approval -- it is the
+            # evidence that the gate bound real exposure, and the dashboard reads it as a
+            # number rather than scraping it out of the reason prose. Present but null on a
+            # refusal thrown before capital was computed; a real number on a cap breach.
+            assert "estimated_capital_at_risk" in d, f"{name} rejection dropped the field: {d}"
+            if "capital at risk" in (d["reason"] or ""):
+                assert d["estimated_capital_at_risk"] is not None, \
+                    f"{name} breached the cap but logged no figure: {d}"
+                assert d["capital_basis"], f"{name} breached the cap but logged no basis: {d}"
             print(f"  refused {name}: {d['reason'][:70]}")
+            print(f"      capital_at_risk={d['estimated_capital_at_risk']}")
     finally:
         object.__setattr__(CONFIG, "demonstration_mode", False)
 

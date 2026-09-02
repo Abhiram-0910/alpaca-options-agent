@@ -31,11 +31,14 @@ degrade to nulls and empty lists. The exporter does not raise on missing input.
 
 Consequences worth knowing before you write a chart:
 
-- **`estimated_capital_at_risk` is `null` on nearly every gate decision.** Not an oversight
-  in the exporter — the `tool_call` log site records `approved` and `reason` and not the
-  capital figure the gate computed, and `RiskGate._reject()` does not return the figure at
-  all on a rejection. The number appears in the rejection's `reason` prose; it is
-  deliberately not parsed back out of prose. Treat this field as sparse.
+- **`estimated_capital_at_risk` is a real number on both approvals and rejections**, logged
+  by the gate itself. It is `null` in exactly two cases, and `null` means "never computed",
+  never "risked nothing": on a decision the gate refused *before* it got as far as computing
+  capital (unrecognisable OCC symbol, DTE outside the window, kill switch, unvalidated
+  symbol), and on records written before this logging existed — those are not backfilled.
+  The figure also appears, rounded, inside the rejection's `reason` prose. **Do not parse it
+  out of the prose**: the prose is rounded for humans, is free to be reworded, and the
+  structured field is the one that is correct.
 - **CI bounds are `null` on `extended` and sub-period records.** The engine saves those
   runs' metrics but not their bootstrap intervals. Only `primary` records have real bounds.
 - **`current_mark` is `null` on a closed or expired trade.** A leg still showing in the
@@ -180,13 +183,20 @@ first within each group** — the interesting content is what the gate refused.
 | `tool` | string \| null | MCP tool the gate was called on |
 | `agent` | string \| null | `openai`, `proposer`, `demonstration`, … |
 | `reason` | string \| null | the gate's own rejection string. `null` on an approval |
-| `estimated_capital_at_risk` | float \| null | **sparse — usually `null`**, see rule 1 above |
+| `estimated_capital_at_risk` | float \| null | dollars the gate computed for this order. `null` only where capital was never computed — see rule 1 |
+| `capital_basis` | string \| null | how the figure was derived, e.g. `"(5.00 width - 0.77 credit) x 100 x 1"`. Multi-leg orders only; the single-leg model has no basis string |
 | `validation_status` | string \| null | e.g. `UNVALIDATED_DEMONSTRATION` |
 | `symbol` | string \| null | order symbol where the call carried one; `null` for non-order tools |
 
-Two log shapes feed this: a `tool_call` record carrying an `approved` field (the LLM paths),
-and a `demonstration_rejected` record (the demonstration path logs its rejection under its
-own type, normalised here to `approved: false`).
+Three log shapes feed this, normalised onto one `approved` bool: a `tool_call` record
+carrying an `approved` field (the LLM paths), and `demonstration_approved` /
+`demonstration_rejected` (the demonstration path logs its verdict under its own types).
+The approval is logged even on a dry run, which is the demonstration path's default — that
+record is the only trace the single demonstration trade leaves before it is submitted.
+
+This is the column that carries the risk evidence. A refused naked short put and the
+approved defined-risk spread that replaced it read as **$75,500 rejected vs $423 approved**,
+which is the whole argument for pricing multi-leg orders as structures rather than per leg.
 
 ---
 

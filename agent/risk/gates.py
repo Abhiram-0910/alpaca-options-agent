@@ -190,9 +190,20 @@ class RiskGate:
             self.committed_this_cycle += existing_capital
             self._existing_capital_seeded = True
 
-    def _reject(self, reason: str) -> dict:
+    def _reject(self, reason: str, capital_at_risk=None, capital_basis: str = None) -> dict:
+        """A rejection carries the capital figure whenever the gate got far enough to compute
+        one -- which is every cap breach, the rejections that actually matter.
+
+        The figure is returned as a real number rather than left to be scraped back out of
+        `reason`: the prose is rounded for humans ("$75,500"), is free to be reworded, and a
+        dashboard parsing money out of an error string will eventually parse the wrong number.
+        Rejections thrown before capital is computed (bad OCC symbol, DTE out of window,
+        kill switch) pass None, and None means "never computed" -- never zero.
+        """
         self.rejections.append(reason)
-        return {"approved": False, "reason": reason}
+        return {"approved": False, "reason": reason,
+                "estimated_capital_at_risk": None if capital_at_risk is None else round(capital_at_risk, 2),
+                "capital_basis": capital_basis}
 
     def release_commitment(self, amount: float) -> None:
         """Rolls back capital that check() committed for a leg whose multi-leg batch was then
@@ -279,7 +290,8 @@ class RiskGate:
         if capital_at_risk > max_per_trade:
             return self._reject(
                 f"Estimated capital at risk ${capital_at_risk:,.0f} [{detail}] exceeds the per-trade "
-                f"cap ${max_per_trade:,.0f}."
+                f"cap ${max_per_trade:,.0f}.",
+                capital_at_risk, detail,
             )
 
         max_total = CONFIG.max_total_options_allocation_pct * self.equity
@@ -289,7 +301,8 @@ class RiskGate:
             return self._reject(
                 f"This trade would push total options capital-at-risk this cycle to "
                 f"${self.committed_this_cycle + capital_at_risk:,.0f}, above the "
-                f"{CONFIG.max_total_options_allocation_pct:.0%} portfolio cap (${max_total:,.0f})."
+                f"{CONFIG.max_total_options_allocation_pct:.0%} portfolio cap (${max_total:,.0f}).",
+                capital_at_risk, detail,
             )
 
         self.committed_this_cycle += capital_at_risk
@@ -419,7 +432,8 @@ class RiskGate:
                 f"Estimated capital at risk ${capital_at_risk:,.0f} exceeds the per-trade cap "
                 f"${max_per_trade:,.0f} ({CONFIG.max_allocation_pct_per_trade:.0%} of equity"
                 + (f", capped at ${CONFIG.max_allocation_usd_per_trade:,.0f}" if CONFIG.max_allocation_usd_per_trade > 0 else "")
-                + ")."
+                + ").",
+                capital_at_risk,
             )
 
         max_total = CONFIG.max_total_options_allocation_pct * self.equity
@@ -429,7 +443,8 @@ class RiskGate:
             return self._reject(
                 f"This trade would push total options capital-at-risk this cycle to "
                 f"${self.committed_this_cycle + capital_at_risk:,.0f}, above the "
-                f"{CONFIG.max_total_options_allocation_pct:.0%} portfolio cap (${max_total:,.0f})."
+                f"{CONFIG.max_total_options_allocation_pct:.0%} portfolio cap (${max_total:,.0f}).",
+                capital_at_risk,
             )
 
         self.committed_this_cycle += capital_at_risk

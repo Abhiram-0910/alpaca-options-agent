@@ -207,9 +207,9 @@ def _validation_section(report) -> list:
 def _gate_decisions(rows: list) -> list:
     """Every RiskGate verdict the log preserves, rejections first.
 
-    Two log shapes carry a verdict: a `tool_call` with an `approved` field (the LLM paths),
-    and `demonstration_rejected` (the demonstration path, which logs the rejection under its
-    own type). The tool_call site does not record the capital figure, hence the null.
+    Three log shapes carry a verdict: a `tool_call` with an `approved` field (the LLM paths),
+    and `demonstration_approved` / `demonstration_rejected` (the demonstration path logs its
+    verdict under its own types), normalised here onto one `approved` bool.
     """
     out = []
     for r in rows:
@@ -222,17 +222,19 @@ def _gate_decisions(rows: list) -> list:
                 "agent": r.get("agent"),
                 "reason": r.get("reason"),
                 "estimated_capital_at_risk": _num(r.get("estimated_capital_at_risk")),
+                "capital_basis": r.get("capital_basis"),
                 "validation_status": r.get("validation_status"),
                 "symbol": _order_symbol(r.get("input")),
             })
-        elif kind == "demonstration_rejected":
+        elif kind in ("demonstration_rejected", "demonstration_approved"):
             out.append({
                 "ts": r.get("ts"),
-                "approved": False,
+                "approved": kind == "demonstration_approved",
                 "tool": "place_option_order",
                 "agent": "demonstration",
                 "reason": r.get("reason"),
                 "estimated_capital_at_risk": _num(r.get("estimated_capital_at_risk")),
+                "capital_basis": r.get("capital_basis"),
                 "validation_status": r.get("validation_status"),
                 "symbol": _order_symbol(r.get("payload")),
             })

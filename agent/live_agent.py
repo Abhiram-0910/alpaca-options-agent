@@ -222,6 +222,12 @@ async def run_cycle() -> dict:
                     input=block.input,
                     approved=decision.get("approved"),
                     reason=decision.get("reason"),
+                    # Logged on approvals AND rejections. A rejected order's capital figure is
+                    # the evidence that the gate bound real exposure, so it has to survive the
+                    # cycle -- it is gone from everywhere else once the tool result is clipped.
+                    estimated_capital_at_risk=decision.get("estimated_capital_at_risk"),
+                    capital_basis=decision.get("capital_basis"),
+                    validation_status=decision.get("validation_status"),
                     result=result_text[:2000],
                 )
                 tool_results.append({

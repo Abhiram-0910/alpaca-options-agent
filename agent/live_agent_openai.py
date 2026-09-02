@@ -141,6 +141,11 @@ async def run_cycle() -> dict:
 
                 log_event("tool_call", agent="openai", tool=name, input=tool_input,
                           approved=decision.get("approved"), reason=decision.get("reason"),
+                          # Logged on approvals AND rejections -- see the matching comment in
+                          # live_agent.py.
+                          estimated_capital_at_risk=decision.get("estimated_capital_at_risk"),
+                          capital_basis=decision.get("capital_basis"),
+                          validation_status=decision.get("validation_status"),
                           result=result_text[:2000])
                 messages.append({"role": "tool", "tool_call_id": tc.id,
                                  "content": clip_tool_result(result_text)})

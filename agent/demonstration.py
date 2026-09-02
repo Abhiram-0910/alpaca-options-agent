@@ -289,8 +289,20 @@ async def run_cycle(dry_run: bool = True) -> dict:
         if not decision.get("approved"):
             result["rejections"].append(decision.get("reason", ""))
             log_event("demonstration_rejected", reason=decision.get("reason"),
-                      payload=payload, validation_status=DEMONSTRATION_STATUS)
+                      payload=payload,
+                      estimated_capital_at_risk=decision.get("estimated_capital_at_risk"),
+                      capital_basis=decision.get("capital_basis"),
+                      validation_status=DEMONSTRATION_STATUS)
             return result
+
+        # The approval is logged here rather than only alongside a submitted order, because a
+        # dry run returns below and the demonstration trade is dry-run by default. Without
+        # this the one gate decision that matters most -- the approval of the only trade this
+        # agent places -- was recorded nowhere at all.
+        log_event("demonstration_approved", symbol=SYMBOL, payload=payload,
+                  estimated_capital_at_risk=decision.get("estimated_capital_at_risk"),
+                  capital_basis=decision.get("capital_basis"), dry_run=dry_run,
+                  validation_status=DEMONSTRATION_STATUS)
 
         if dry_run:
             result["skipped"].append("dry run — payload built and approved, not submitted")

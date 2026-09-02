@@ -68,11 +68,29 @@ def demo() -> None:
             f.write(json.dumps({"ts": "2026-09-02T09:00:00+00:00", "type": "tool_call",
                                 "tool": "place_option_order", "approved": True,
                                 "input": {"symbol": "IWM260904P00230000"}}) + "\n")
+            # A cap rejection: the figure is a real number, never scraped out of the prose.
+            f.write(json.dumps({"ts": "2026-09-02T09:10:00+00:00", "type": "tool_call",
+                                "tool": "place_option_order", "agent": "openai",
+                                "approved": False,
+                                "reason": "Estimated capital at risk $75,500 exceeds the "
+                                          "per-trade cap $8,000 (8% of equity).",
+                                "estimated_capital_at_risk": 75500.0,
+                                "input": {"symbol": "SPY260904P00755000"}}) + "\n")
+            # A rejection thrown before capital was computed: null, not zero.
             f.write(json.dumps({"ts": "2026-09-02T09:16:42+00:00", "type": "demonstration_rejected",
                                 "reason": "exceeds the per-trade cap",
                                 "validation_status": "UNVALIDATED_DEMONSTRATION",
                                 "payload": {"limit_price": "-0.81", "legs": [
                                     {"symbol": "SPY260904P00750000"}]}}) + "\n")
+            # The demonstration approval. Logged even on a dry run, which is the default and
+            # therefore the only record the one trade that matters would otherwise leave.
+            f.write(json.dumps({"ts": "2026-09-02T09:20:00+00:00", "type": "demonstration_approved",
+                                "symbol": "SPY", "dry_run": True,
+                                "estimated_capital_at_risk": 423.0,
+                                "capital_basis": "(5.00 width - 0.77 credit) x 100 x 1",
+                                "validation_status": "UNVALIDATED_DEMONSTRATION",
+                                "payload": {"limit_price": "-0.77", "legs": [
+                                    {"symbol": "SPY260904P00751000"}]}}) + "\n")
             f.write("{ this line is truncated\n")
 
         snap = _export_with_logs_dir(tmp)
@@ -96,15 +114,33 @@ def demo() -> None:
         assert half["trades"] is None and half["sharpe"] == 1.706, half
 
         # The truncated line must not have taken the export down with it.
-        assert len(snap["gate_decisions"]) == 2, snap["gate_decisions"]
-        # Rejections first.
-        assert snap["gate_decisions"][0]["approved"] is False
-        assert snap["gate_decisions"][0]["symbol"] == "SPY260904P00750000"
-        # Never recorded at the tool_call log site, so it must be null, not 0.
-        assert snap["gate_decisions"][1]["estimated_capital_at_risk"] is None
+        gates = snap["gate_decisions"]
+        assert len(gates) == 4, gates
+        # Rejections first, newest first within each group.
+        assert [g["approved"] for g in gates] == [False, False, True, True], gates
+
+        by_cap = {g["estimated_capital_at_risk"] for g in gates}
+        # The column that carries the evidence: a refused $75,500 against an approved $423.
+        assert 75500.0 in by_cap and 423.0 in by_cap, gates
+
+        approval = next(g for g in gates if g["agent"] == "demonstration" and g["approved"])
+        assert approval["estimated_capital_at_risk"] == 423.0, approval
+        assert approval["capital_basis"] == "(5.00 width - 0.77 credit) x 100 x 1", approval
+        assert approval["validation_status"] == "UNVALIDATED_DEMONSTRATION", approval
+
+        # A rejection thrown before capital was computed stays null. Null means "never
+        # computed"; 0.0 would read as "this order risked nothing", which is a different and
+        # false claim.
+        early = next(g for g in gates if g["agent"] == "demonstration" and not g["approved"])
+        assert early["estimated_capital_at_risk"] is None, early
+        assert early["symbol"] == "SPY260904P00750000", early
+        # ...and the figure is never recovered from the reason prose, which does contain it.
+        big = next(g for g in gates if g["estimated_capital_at_risk"] == 75500.0)
+        assert "$75,500" in big["reason"], big
+        assert big["capital_basis"] is None, big
 
         print("populated logs/ -> 1 distinct pair vs 4 records, passed-primary-gate 1 but "
-              "cleared 0, rejections first, "
+              "cleared 0, rejections first, capital column $75,500 refused vs $423 approved, "
               "truncated line skipped, uncomputed CIs null")
 
     print("dashboard export: all checks pass")
