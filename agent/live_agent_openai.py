@@ -21,7 +21,7 @@ from agent.openai_cost import call_cost
 from agent.backtest_evidence import load_backtest_summary
 from agent.reflection import summarize_for_prompt
 from agent.live_agent import _build_system_prompt
-from agent.mcp_parsers import parse_order_error
+from agent.mcp_parsers import parse_order_error, clip_tool_result
 
 
 def _to_openai_tools(mcp_tools: list) -> list:
@@ -142,7 +142,8 @@ async def run_cycle() -> dict:
                 log_event("tool_call", agent="openai", tool=name, input=tool_input,
                           approved=decision.get("approved"), reason=decision.get("reason"),
                           result=result_text[:2000])
-                messages.append({"role": "tool", "tool_call_id": tc.id, "content": result_text})
+                messages.append({"role": "tool", "tool_call_id": tc.id,
+                                 "content": clip_tool_result(result_text)})
 
         log_event("cycle_complete", agent="openai", tool_calls=tool_calls_made, api_calls=api_calls_made,
                    cycle_cost_usd=round(cycle_cost, 6), summary=final_summary, rejections=risk_gate.rejections)

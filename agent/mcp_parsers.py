@@ -34,6 +34,35 @@ def parse_latest_trade_price(raw: str) -> float:
     raise ValueError(f"could not parse latest trade price from: {raw[:300]}")
 
 
+# Alpaca's MCP tool schemas alone are ~21K tokens, and an agent gets a 25-tool-call budget
+# per cycle. A single get_option_chain on a dense name returns far more than the whole rest of
+# the conversation, so appending results verbatim overruns even a 128K window within a few
+# calls -- verified live: a cycle died on
+# "your messages resulted in 149721 tokens" after a handful of chain reads.
+PROMPT_RESULT_CHAR_LIMIT = 12_000
+
+
+def clip_tool_result(raw: str, limit: int = PROMPT_RESULT_CHAR_LIMIT) -> str:
+    """Bound one tool result before it goes into an LLM conversation.
+
+    Only for text handed back to a model. Code that *parses* a result (the deterministic
+    executor, the chain fetcher) must always use the untruncated string -- a clipped chain is
+    a silently incomplete chain, which is worse than a large one.
+
+    Keeps the head, because Alpaca's envelope and the first records carry the shape the model
+    needs, and says plainly what was dropped and what to do about it: an agent told its query
+    was too broad can narrow it, while an agent handed a silently truncated blob cannot.
+    """
+    if raw is None or len(raw) <= limit:
+        return raw
+    dropped = len(raw) - limit
+    return (raw[:limit] +
+            f"\n\n...[TRUNCATED: {dropped:,} of {len(raw):,} characters omitted to stay inside the "
+            f"context window. This result was too broad to use whole. Re-query with a narrower "
+            f"filter -- a single expiration_date, a tighter strike_price_gte/strike_price_lte "
+            f"band, or a smaller limit -- rather than relying on what is shown above.]")
+
+
 def parse_order_error(raw: str) -> Optional[str]:
     """place_option_order (or any other order-placing tool): Alpaca rejecting an order is NOT
     surfaced as an MCP-level error/exception -- the installed alpaca-mcp-server catches the

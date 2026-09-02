@@ -19,7 +19,7 @@ from agent.alerts import alert
 from agent.llm_cost import call_cost as _call_cost
 from agent.backtest_evidence import load_backtest_summary
 from agent.reflection import summarize_for_prompt
-from agent.mcp_parsers import parse_order_error
+from agent.mcp_parsers import parse_order_error, clip_tool_result
 
 # Formatted at import, not inside _build_system_prompt: multi_agent.py interpolates this
 # constant into its own f-strings, where any {placeholder} left in it would survive as
@@ -227,7 +227,7 @@ async def run_cycle() -> dict:
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": result_text,
+                    "content": clip_tool_result(result_text),
                 })
 
             messages.append({"role": "user", "content": tool_results})
