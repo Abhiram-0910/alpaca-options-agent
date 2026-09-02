@@ -6,10 +6,13 @@ Updated at the end of every session, read at the start. Newest entry at the top.
 
 ## Current state
 
-**Updated:** 2 Sep 2026, 15:05 IST
+**Updated:** 2 Sep 2026, 16:00 IST
 **Branch:** main
-**Agents active:** Claude Code (code), second agent (submission materials) — still not started
-**Status:** Both LLM paths run on OpenAI. The Proposer/Critic pipeline works end to end and
+**Agents active:** Claude Code (code), Antigravity (dashboard, separate worktree),
+second agent (submission materials) — still not started
+**Status:** `logs/dashboard.json` now exists with a documented schema, so the dashboard
+worktree has a contract to build against instead of invented filenames. Both LLM paths run
+on OpenAI. The Proposer/Critic pipeline works end to end and
 vetoed a real proposal on correct grounds. The validation gate still clears nothing — that
 remains the headline finding. Demonstration spread is pinned to the 4 Sep expiry, sized to
 $430, gate-approved, **not submitted**.
@@ -17,6 +20,35 @@ $430, gate-approved, **not submitted**.
 in-session. Then submission materials, which remain entirely undone with ~44 hours left.
 
 ## Sessions
+
+### 2 Sep 2026 — dashboard export contract — *Claude Code*
+
+**Done**
+- `agent/dashboard.py`, one function, writes `logs/dashboard.json`: account, validation,
+  gate_decisions, trades, meta. Called from every `main.py` mode in a `finally` block, plus
+  `--export-dashboard` to regenerate without running a cycle.
+- `docs/DASHBOARD-SCHEMA.md` is the contract between this worktree and Antigravity's.
+  `logs/` is gitignored, so a real generated export is committed at
+  `docs/dashboard.example.json` for the other worktree to build against.
+- `test_dashboard_export.py` covers the cold-checkout case: empty `logs/`, no backtest
+  report, no credentials and a truncated JSONL line must all still produce valid JSON.
+
+**Decided**
+- Two count pairs are kept separate in `meta` because both were already being conflated:
+  `distinct_pairs_evaluated` (21) vs `total_validation_records` (24, the extra 3 being
+  IWM/covered_call's extended retest and its two sub-period halves), and `pairs_cleared`
+  (0) vs `pairs_passing_primary_gate` (1). Reading `passed` instead of `enabled_for_paper`
+  makes a dashboard print "1 cleared" and contradict the headline finding.
+- A value that was never recorded is emitted as `null`, never a placeholder.
+  `estimated_capital_at_risk` is therefore null on nearly every gate decision, and the
+  figure is deliberately **not** regex'd back out of the rejection's prose.
+
+**Known gap, not fixed here**
+- `RiskGate._reject()` returns `{approved, reason}` only, and the `tool_call` log site does
+  not record the capital figure on an approval either. Until both are changed,
+  `gate_decisions[].estimated_capital_at_risk` stays sparse. Roughly a three-line fix across
+  `agent/risk/gates.py` and the two LLM tool-call log sites; left out because it changes the
+  order path, which was out of scope for this task.
 
 ### 2 Sep 2026 — make the LLM paths runnable, pin the demonstration expiry — *Claude Code*
 
