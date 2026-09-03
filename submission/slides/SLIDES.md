@@ -20,39 +20,48 @@ style: |
 
 ---
 
-## 1. The Variance Problem
+## 1. The Determinism Problem
 
-Over a 3.5-session evaluation window, a strategy with a true annualised Sharpe of **1.0** produces:
+The central problem in agentic trading is not intelligence — it is reproducibility. 
 
-- A t-statistic of **0.118**
-- A **54.7%** chance of positive P&L
-- A **45.3%** chance of losing money
+We ran the agent 40 times on the same prompt at temperature 0 with a fixed seed. 
+- **High Divergence:** A significant number of replays diverged despite fixed parameters.
+- **Tool Flips:** Replays changed the *tool called entirely*, not just arguments. One original call flipped from reading an option chain to attempting an order.
 
-**Skill accounts for just 1.4% of outcome variance on this horizon.**
-
-Any 3-day paper P&L figure is statistical noise. We designed a system that acknowledges this and survives the variance by validating first.
+**Conclusion:** The model is not reproducible under conditions meant to guarantee it. Authority must sit in deterministic Python, not the LLM.
 
 ---
 
-## 2. Statistical Validation Gate
+## 2. Adversarial Validation of the Risk Gate
 
-We evaluated 21 candidate strategies (SPY, QQQ, IWM × 7 structures).
+We ran the agent's risk gate against itself to prove it works under adversarial conditions. Two critical holes were found and closed:
 
-- **All 21 candidates were refused.**
-- The closest: SPY vertical credit spread (78% win rate, Sharpe 1.67).
-- Refused because the Sharpe CI lower bound remained negative (-0.32).
+1. **Ratio Quantity Exploit:** A buy-1/sell-2 payload was previously priced as a 1:1 vertical (second short leg treated as zero-cost). The gate now correctly parses and stops this.
+2. **Hallucinated Strikes:** The gate previously approved a hallucinated OCC symbol with a non-existent strike. It now validates every leg against the live chain.
 
-**Moving-block bootstrap:**
-We corrected our bootstrap from an independent-draw model to a moving-block model, cutting the false-positive rate from **10.8%** to a calibrated **2.5%**.
+Both were found by the agent attacking itself.
 
 ---
 
-## 3. The Proposer / Critic Architecture
+## 3. Statistical Validation Gate
+
+We evaluated 21 distinct strategy/symbol pairs (SPY, QQQ, IWM × 7 structures), producing 24 total validation records.
+
+- **0 pairs cleared for live trading.**
+- The closest: SPY vertical credit spread (78% win rate, Sharpe 1.67). Refused because the Sharpe CI lower bound remained negative (-0.32).
+- **Moving-block bootstrap:** Correcting from an i.i.d. bootstrap to a moving-block model cut the false-positive rate from **10.8%** to a calibrated **2.5%**.
+
+The gate governs claims of edge. The risk layer governs structural safety.
+
+---
+
+## 4. The Proposer / Critic Architecture
 
 The LLM never computes a number that reaches an order.
 
 - **Proposer Agent:** Suggests regime and parameters.
 - **Critic Agent:** Evaluates the proposal against our validation graveyard.
+- **Featherless Arbiter:** A third open-weights model arbitrates disagreements.
 
 **Live Veto:** The Critic agent actively vetoed a proposed MSFT cash-secured put for citing no backtest evidence on a symbol that never cleared the gate.
 
@@ -60,30 +69,18 @@ The LLM never computes a number that reaches an order.
 
 ---
 
-## 4. Deterministic Risk Gate
+## 5. Deterministic Risk Gate & Execution
 
-Every order must pass a non-LLM Python risk gate before routing to the Alpaca MCP server.
+Every order must pass the non-LLM Python risk gate before routing to the Alpaca MCP server.
 
 - We implemented a batch model for structure-level capital at risk.
 - **Old per-leg model:** Refused $75,500 capital-at-risk for a SPY spread.
-- **New batch model:** Correctly calculated $423 risk and approved the trade.
+- **New batch model:** Correctly calculated $[FINAL_BATCH_RISK] risk and approved the trade.
 
-**Enforcement:** Prevents undefined risk from reaching the broker.
-
----
-
-## 5. The Demonstration Trade
-
-Because the gate governs claims of edge, not structural safety, we executed **one** unvalidated demonstration trade.
-
-- **Structure:** SPY defined-risk credit spread.
-- **Expiry:** Friday, September 4th.
-- **Exit Plan:** Closing Thursday afternoon.
-
-Holding through Friday's nonfarm payrolls print means inflated extrinsic value and live pin risk. Managing risk is worth more than hoping for decay.
+**Demonstration Trade:** We executed **one** unvalidated SPY credit spread pinned to the Friday Sept 4th expiry, explicitly bypassing validation to demonstrate the execution path. We close Thursday to avoid Friday's NFP event risk.
 
 ---
 
 # Thank You
-Code public. Paper Account ID submitted.
+Code public.
 *Options quotes provided by Alpaca's free-tier Indicative Pricing Feed.*

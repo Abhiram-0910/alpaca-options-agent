@@ -32,9 +32,11 @@ Our agent is designed to refuse bad trades. This single Proposer/Critic cycle co
 **[Visual: Switch screen recording to the Validation Graveyard section of the UI. Scroll slowly through the 21 FAIL entries.]**
 
 **Speaker:**
-"Our validation gate ran a moving-block bootstrap against three liquid ETFs across five defined-risk structures. 
+"Our validation gate ran a moving-block bootstrap against 21 distinct strategy/symbol pairs. 
 
-It refused all 21 candidates. 
+It generated 24 total validation records including extended-history and sub-period re-runs. 
+
+0 pairs cleared for live trading. 
 
 The closest was a SPY vertical credit spread. It had a 78% win rate and a simulated Sharpe of 1.67. But the gate refused it because the lower bound of its Sharpe confidence interval remained negative. A high win rate on a negatively-skewed payoff is a shape parameter, not a performance metric. 
 
@@ -56,8 +58,8 @@ We are deliberately closing this position on Thursday afternoon, ahead of Friday
 **[Visual: Back to speaker on camera.]**
 
 **Speaker:**
-"We also fixed the multi-leg capital risk model. A per-leg calculation would have required $75,500 in capital to margin this SPY spread. Our batch model correctly calculated the structure-level risk at $423, which allowed the MCP order to clear.
+"We also fixed the multi-leg capital risk model. A per-leg calculation would have required [FINAL_PER_LEG_RISK] in estimated capital-at-risk for this SPY spread. Our batch model correctly calculated the structure-level risk at [FINAL_BATCH_RISK], which allowed the MCP order to clear.
 
-Over a three-and-a-half session window, outcome variance dominates skill. A strategy with a true annualised Sharpe of 1.0 still has a 45% chance of losing money this week. We built a system that survives that variance by saying no.
+Over a three-and-a-half session window, outcome variance dominates skill. Even a genuinely elite strategy loses money over this window more than a third of the time. We built a system that survives that variance by saying no.
 
 Thank you to Alpaca and lablab for the infrastructure. The code is public."

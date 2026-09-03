@@ -34,12 +34,40 @@
             </div>
         </section>
 
+        <!-- Determinism Measurement Section — the reason the gate exists -->
+        <section class="dashboard-section determinism-section">
+            <header class="section-header">
+                <h2>Model Determinism Measurement</h2>
+                <span class="badge danger" id="determinism-badge">Loading...</span>
+            </header>
+            <p class="section-desc" id="determinism-desc">Loading determinism data...</p>
+            <div id="determinism-summary" class="card-grid"></div>
+            <div class="table-container" id="determinism-table-container" style="display:none; margin-top:1.5rem;">
+                <table id="determinism-table">
+                    <thead>
+                        <tr>
+                            <th>Replay #</th>
+                            <th>Diverged</th>
+                            <th>Original Tool</th>
+                            <th>Replayed Tool</th>
+                            <th>Args Changed</th>
+                            <th>Tool Changed</th>
+                        </tr>
+                    </thead>
+                    <tbody id="determinism-body">
+                        <tr><td colspan="6" class="empty-state">No replay data yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <!-- Risk Gate Decisions Section -->
         <section class="dashboard-section">
             <header class="section-header">
                 <h2>Risk Gate Decisions</h2>
                 <span class="badge danger">Strict Enforcement Active</span>
             </header>
+            <p class="section-desc" id="read-tool-desc">Loading decisions...</p>
             <div class="table-container">
                 <table id="risk-table">
                     <thead>
@@ -64,9 +92,9 @@
         <section class="dashboard-section">
             <header class="section-header">
                 <h2>Validation Graveyard</h2>
-                <span class="badge warning">21 of 21 Candidates Refused</span>
+                <span class="badge warning" id="validation-badge">Loading...</span>
             </header>
-            <p class="section-desc">The statistical validation gate refused all candidates evaluated using a moving-block bootstrap against a 2.5% nominal target.</p>
+            <p class="section-desc" id="validation-desc">Loading validation data...</p>
             <div class="table-container">
                 <table id="validation-table">
                     <thead>
@@ -75,7 +103,7 @@
                             <th>Symbol</th>
                             <th>Win Rate</th>
                             <th>Sharpe</th>
-                            <th>Sharpe CI Lower Bound</th>
+                            <th>Scope</th>
                             <th>Result</th>
                         </tr>
                     </thead>
@@ -86,11 +114,65 @@
                 </table>
             </div>
         </section>
+
+        <!-- Adversarial Harness Section -->
+        <section class="dashboard-section adversarial-section">
+            <header class="section-header">
+                <h2>🛡️ Adversarial Gate Harness</h2>
+                <span class="badge danger" id="adversarial-badge">Loading...</span>
+            </header>
+            <p class="section-desc" id="adversarial-desc">Loading adversarial attack results...</p>
+            <div class="table-container">
+                <table id="adversarial-table">
+                    <thead>
+                        <tr>
+                            <th>Attack Type</th>
+                            <th>Payload</th>
+                            <th>Expected Stop</th>
+                            <th>Actual Stop</th>
+                            <th>Rejection Reason</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adversarial-body">
+                        <!-- Populated by JS -->
+                        <tr><td colspan="6" class="empty-state">No adversarial harness data available. Run the agent to generate.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Fill Analysis Section -->
+        <section class="dashboard-section">
+            <header class="section-header">
+                <h2>Fill Analysis</h2>
+                <span class="badge" id="fill-badge">Loading...</span>
+            </header>
+            <p class="section-desc">Indicative quote captured immediately before each order versus the simulated fill price, per leg.</p>
+            <div class="table-container">
+                <table id="fill-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Symbol</th>
+                            <th>Leg</th>
+                            <th>Side</th>
+                            <th>Pre-order Quote</th>
+                            <th>Fill Price</th>
+                            <th>Delta</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fill-body">
+                        <!-- Populated by JS -->
+                        <tr><td colspan="7" class="empty-state">No fill analysis data available. Run the agent to generate.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </main>
 
     <footer>
-        <div class="container">
-            <p>UNVALIDATED_DEMONSTRATION mode active. Agent executed strictly for logic demonstration.</p>
+        <div class="container" id="footer-text">
         </div>
     </footer>
 

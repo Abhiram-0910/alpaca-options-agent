@@ -210,3 +210,46 @@ footer {
 
 .status-refused { color: var(--accent-red); font-weight: 600; }
 .status-approved { color: var(--accent-green); font-weight: 600; }
+.status-blocked { color: var(--accent-red); font-weight: 700; font-size: 0.8rem; letter-spacing: 0.05em; }
+.status-pass { color: var(--accent-green); font-weight: 700; font-size: 0.8rem; letter-spacing: 0.05em; }
+.status-fail { color: var(--accent-red); font-weight: 700; font-size: 0.8rem; letter-spacing: 0.05em; }
+
+/* Adversarial harness section — distinct border to signal it's the proof section */
+.adversarial-section {
+    border-left: 3px solid var(--accent-red);
+    padding-left: 1.5rem;
+}
+
+.adversarial-section h2 {
+    color: var(--text-primary);
+}
+
+/* Attack payload — truncate long injected strings but allow expand on hover */
+.payload-cell {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: help;
+    color: var(--text-secondary);
+}
+
+/* Fill delta coloring */
+.fill-delta-neg { color: var(--accent-red); font-family: var(--font-mono); }
+.fill-delta-pos { color: var(--accent-green); font-family: var(--font-mono); }
+.fill-delta-zero { color: var(--text-muted); font-family: var(--font-mono); }
+
+/* Determinism section — first thing a judge sees, blue left-border to distinguish from adversarial red */
+.determinism-section {
+    border-left: 3px solid var(--accent-blue);
+    padding-left: 1.5rem;
+}
+
+.determinism-section .card-grid {
+    margin-top: 1rem;
+}
+
+.diverged-yes { color: var(--accent-red); font-weight: 600; }
+.diverged-no  { color: var(--text-muted); }
