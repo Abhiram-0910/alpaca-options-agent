@@ -6,6 +6,28 @@ Read at session start. Updated at session end.
 
 ## Now — blocking, do in this order
 
+- [ ] **ONE SESSION LEFT.** Thu 3 Sep is `LAST_TRADING_DAY`. Entries stop 15:00 ET Thu
+      (00:30 IST Fri), flat by 15:45 ET Thu (01:15 IST Fri). Friday the loop refuses to
+      trade. The demonstration order must be placed tonight or not at all.
+- [ ] Tell Antigravity: export `schema_version` is now **2** — `reproducibility` renamed to
+      `determinism`, `counterfactual` added.
+- [ ] Run `python main.py --preflight` at 18:50 IST. Currently 11 green / 1 warn / 0 red.
+- [ ] **Set `FEATHERLESS_API_KEY`** or drop the third-seat claim from the submission. The
+      arbiter is wired and fails closed, but the council is two models until the key exists.
+- [ ] Antigravity: 3 of 16 arbiter tests need updating — two assert a removed injection
+      vulnerability, one asserts the crashing `log_event` call shape.
+- [x] Arbiter wired as advisory third seat; 5 council attacks added, 18/18 blocked (3 Sep)
+- [x] Adversarial self-test — 13 attacks, 2 gate holes found and fixed (3 Sep)
+- [x] Fill-gap instrumentation — captures on tonight's fill, unanswered until then (3 Sep)
+- [x] Replay determinism — 5 of 8 divergent at temp 0 / fixed seed / same fingerprint (3 Sep)
+- [ ] **Write the determinism result into the submission.** n=40: 70% divergent (95% CI
+      54.6–81.9%), 19 of 28 changing which tool was called, 0 across a fingerprint change.
+      Now in ARCHITECTURE.md §Decisions and the export's `determinism` section.
+- [ ] **Quote the counterfactual honestly if it is used**: +$1,326.64 over ONE day, marks not
+      results, driven by a +0.44%/+0.23%/+1.18% up session. It prices the gate, not judges it.
+- [x] Supervised unattended loop — `agent/supervisor.py`, verified 3 live cycles pre-open (3 Sep)
+- [x] Alpaca CLI wired as the account/positions read path in the dashboard export (3 Sep)
+
 - [ ] **Place the demonstration spread**, in-session, after operator review:
       `DEMONSTRATION_MODE=true python main.py --demonstrate --submit`. Dry run approved at
       $430 capital at risk — sell SPY 756P / buy 751P expiring **4 Sep**, 0.70 credit. Verify
@@ -44,11 +66,11 @@ Read at session start. Updated at session end.
 - [x] Dashboard export contract — `agent/dashboard.py` writes `logs/dashboard.json`,
       shape documented in `docs/DASHBOARD-SCHEMA.md`, sample at `docs/dashboard.example.json`
       because `logs/` is gitignored. Antigravity builds against that (2 Sep)
-- [ ] Record `estimated_capital_at_risk` on gate decisions. `RiskGate._reject()` returns
-      `{approved, reason}` only, and the `tool_call` log sites don't log the figure on an
-      approval either, so `gate_decisions[].estimated_capital_at_risk` is null almost
-      everywhere in the dashboard export. ~3 lines across `agent/risk/gates.py`,
-      `agent/live_agent.py` and `agent/live_agent_openai.py`.
+- [x] `estimated_capital_at_risk` logged on gate rejections and approvals — `_reject()`
+      carries the figure and basis at all four cap sites, both LLM tool_call log sites record
+      them, and the demonstration path now logs `demonstration_approved` (it previously
+      logged nothing when the gate approved, and dry run is the default). Verified $75,500
+      refused vs $423 approved (2 Sep)
 - [ ] Label indicative-feed data as such everywhere it surfaces to a user or a judge.
       Partly done: `meta.data_feed` in the dashboard export already names it.
 - [ ] Add the conservative mark-to-market alongside Alpaca's simulated P&L.

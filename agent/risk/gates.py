@@ -53,6 +53,7 @@ def mleg_capital_at_risk(legs: list, qty: float, limit_price) -> tuple:
     overstate.
     """
     parsed = []
+    ratios = set()
     for leg in legs:
         p = parse_occ_symbol((leg.get("symbol") or "").strip())
         if p is None:
@@ -60,7 +61,28 @@ def mleg_capital_at_risk(legs: list, qty: float, limit_price) -> tuple:
         p["side"] = (leg.get("side") or "").lower()
         if p["side"] not in ("buy", "sell"):
             return None, f"leg {leg.get('symbol')} has side {leg.get('side')!r}; expected buy or sell"
+        # ratio_qty was read by nothing here until the adversarial harness submitted a
+        # buy-1/sell-2 payload and the gate approved it: the width-times-qty model below
+        # priced it as a 1:1 vertical, so the second short contract was naked and charged
+        # nothing. Ratio spreads are out of scope for this agent, and refusing them is both
+        # safe and honest -- pricing one correctly is a different structure model, and a gate
+        # that silently mis-prices is worse than one that declines.
+        raw_ratio = leg.get("ratio_qty", 1)
+        if raw_ratio is None or raw_ratio == "":
+            raw_ratio = 1
+        try:
+            ratio = float(raw_ratio)
+        except (TypeError, ValueError):
+            return None, f"leg {leg.get('symbol')} has ratio_qty {leg.get('ratio_qty')!r}; expected a number"
+        if ratio <= 0:
+            return None, f"leg {leg.get('symbol')} has ratio_qty {ratio:g}; must be positive"
+        ratios.add(ratio)
         parsed.append(p)
+
+    if len(ratios) != 1:
+        return None, ("legs carry unequal ratio_qty "
+                      f"({', '.join(f'{r:g}' for r in sorted(ratios))}); this gate prices 1:1 "
+                      "defined-risk structures only, and an unmatched short leg is naked")
 
     if len({p["expiration"] for p in parsed}) != 1:
         return None, ("legs span more than one expiration; this gate only prices single-expiry "
@@ -143,7 +165,25 @@ class RiskGate:
     # it has already said yes to, exactly like committed_this_cycle does for capital.
     symbols_committed_this_cycle: set = field(default_factory=set)
     rejections: list = field(default_factory=list)
+    # OCC symbols a caller has confirmed exist on a real chain it just fetched. Empty by
+    # default and then inert: the gate is synchronous and does no network I/O, so it cannot
+    # establish on its own whether a contract is listed. A caller that HAS a chain in hand
+    # (the demonstration path builds its legs from one) passes it here, and the gate then
+    # refuses any leg outside it.
+    #
+    # Found by the adversarial harness: with this empty, an order for a strike $250 above
+    # every listed SPY strike was approved and would have been sent to Alpaca to be rejected,
+    # having first consumed this cycle's capital budget for a contract that cannot fill.
+    known_contracts: set = field(default_factory=set)
     _existing_capital_seeded: bool = False
+
+    def _unknown_contract(self, symbol: str) -> str:
+        """Rejection reason if `symbol` is outside a supplied chain, else ""."""
+        if self.known_contracts and symbol not in self.known_contracts:
+            return (f"{symbol} is not on the option chain this cycle fetched "
+                    f"({len(self.known_contracts)} contracts); refusing to submit an order for "
+                    f"a contract that does not exist")
+        return ""
 
     def refresh(self, account_info: dict, positions: list) -> None:
         """Convenience wrapper for the common case of updating both at once (e.g. at the top of
@@ -190,9 +230,20 @@ class RiskGate:
             self.committed_this_cycle += existing_capital
             self._existing_capital_seeded = True
 
-    def _reject(self, reason: str) -> dict:
+    def _reject(self, reason: str, capital_at_risk=None, capital_basis: str = None) -> dict:
+        """A rejection carries the capital figure whenever the gate got far enough to compute
+        one -- which is every cap breach, the rejections that actually matter.
+
+        The figure is returned as a real number rather than left to be scraped back out of
+        `reason`: the prose is rounded for humans ("$75,500"), is free to be reworded, and a
+        dashboard parsing money out of an error string will eventually parse the wrong number.
+        Rejections thrown before capital is computed (bad OCC symbol, DTE out of window,
+        kill switch) pass None, and None means "never computed" -- never zero.
+        """
         self.rejections.append(reason)
-        return {"approved": False, "reason": reason}
+        return {"approved": False, "reason": reason,
+                "estimated_capital_at_risk": None if capital_at_risk is None else round(capital_at_risk, 2),
+                "capital_basis": capital_basis}
 
     def release_commitment(self, amount: float) -> None:
         """Rolls back capital that check() committed for a leg whose multi-leg batch was then
@@ -239,6 +290,9 @@ class RiskGate:
             parsed = parse_occ_symbol(leg_symbol)
             if not parsed:
                 return self._reject(f"'{leg_symbol}' is not a recognizable OCC option symbol; refusing to submit.")
+            unknown = self._unknown_contract(leg_symbol)
+            if unknown:
+                return self._reject(unknown)
             dte = (parsed["expiration"] - date.today()).days
             if dte < CONFIG.min_days_to_expiration or dte > CONFIG.max_days_to_expiration:
                 return self._reject(
@@ -279,7 +333,8 @@ class RiskGate:
         if capital_at_risk > max_per_trade:
             return self._reject(
                 f"Estimated capital at risk ${capital_at_risk:,.0f} [{detail}] exceeds the per-trade "
-                f"cap ${max_per_trade:,.0f}."
+                f"cap ${max_per_trade:,.0f}.",
+                capital_at_risk, detail,
             )
 
         max_total = CONFIG.max_total_options_allocation_pct * self.equity
@@ -289,7 +344,8 @@ class RiskGate:
             return self._reject(
                 f"This trade would push total options capital-at-risk this cycle to "
                 f"${self.committed_this_cycle + capital_at_risk:,.0f}, above the "
-                f"{CONFIG.max_total_options_allocation_pct:.0%} portfolio cap (${max_total:,.0f})."
+                f"{CONFIG.max_total_options_allocation_pct:.0%} portfolio cap (${max_total:,.0f}).",
+                capital_at_risk, detail,
             )
 
         self.committed_this_cycle += capital_at_risk
@@ -369,6 +425,9 @@ class RiskGate:
         if not parsed:
             return self._reject(f"'{symbol}' is not a recognizable OCC option symbol; refusing to submit.")
 
+        unknown = self._unknown_contract(symbol)
+        if unknown:
+            return self._reject(unknown)
         dte = (parsed["expiration"] - date.today()).days
         if dte < CONFIG.min_days_to_expiration or dte > CONFIG.max_days_to_expiration:
             return self._reject(
@@ -419,7 +478,8 @@ class RiskGate:
                 f"Estimated capital at risk ${capital_at_risk:,.0f} exceeds the per-trade cap "
                 f"${max_per_trade:,.0f} ({CONFIG.max_allocation_pct_per_trade:.0%} of equity"
                 + (f", capped at ${CONFIG.max_allocation_usd_per_trade:,.0f}" if CONFIG.max_allocation_usd_per_trade > 0 else "")
-                + ")."
+                + ").",
+                capital_at_risk,
             )
 
         max_total = CONFIG.max_total_options_allocation_pct * self.equity
@@ -429,7 +489,8 @@ class RiskGate:
             return self._reject(
                 f"This trade would push total options capital-at-risk this cycle to "
                 f"${self.committed_this_cycle + capital_at_risk:,.0f}, above the "
-                f"{CONFIG.max_total_options_allocation_pct:.0%} portfolio cap (${max_total:,.0f})."
+                f"{CONFIG.max_total_options_allocation_pct:.0%} portfolio cap (${max_total:,.0f}).",
+                capital_at_risk,
             )
 
         self.committed_this_cycle += capital_at_risk

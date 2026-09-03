@@ -77,3 +77,27 @@ account invalidates old ones). Record the account ID — it goes on the submissi
 
 - [ ] `CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, `TODO.md`, `SESSION-LOG.md` in the repo root
 - [ ] `RESEARCH.md` and `COMPETITION-BRIEF.md` in `docs/`
+
+## Alpaca CLI (read path)
+
+The dashboard export reads account and positions through Alpaca's CLI
+(`alpacahq/cli`), falling back to alpaca-py when the binary is absent. Order
+placement does not use it — that stays on the MCP server.
+
+Prebuilt binary, no Go toolchain:
+
+```bash
+V=0.0.14
+curl -sLO https://github.com/alpacahq/cli/releases/download/v$V/cli_${V}_linux_amd64.tar.gz
+curl -sLO https://github.com/alpacahq/cli/releases/download/v$V/checksums.txt
+grep linux_amd64 checksums.txt | sha256sum -c -
+tar xzf cli_${V}_linux_amd64.tar.gz alpaca && install -m755 alpaca ~/.local/bin/alpaca
+
+alpaca profile login --api-key --paper --key "$ALPACA_API_KEY" --secret "$ALPACA_SECRET_KEY"
+alpaca doctor                    # should report both APIs connected
+python agent/alpaca_cli.py       # self-check
+```
+
+Note: `ALPACA_API_KEY` in the environment overrides the stored profile on every
+command. That is fine here — same paper credentials either way — but it means a
+live key in the environment would be used, so keep `.env` paper-only.

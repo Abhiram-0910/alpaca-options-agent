@@ -135,6 +135,112 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
 
 ## Sessions
 
+### 3 Sep 2026 — counterfactual, determinism at n=40, pre-flight — *Claude Code*
+
+**The counterfactual costs us, and it should be quoted that way**
+- 15 of 21 refused pairs profitable; taking all of them returns **+$1,326.64**.
+- Window is **one** trading day (1 Sep close → 2 Sep close), not three — today had not
+  printed a bar. Every position closed early at mark, so these are marks, not results.
+- SPY +0.44%, QQQ +0.23%, IWM +1.18% over the window. Short premium profits in an up day by
+  construction; the three `long_directional` pairs lost. The number is a function of one
+  session's direction and `underlying_move_pct` ships beside it.
+- It prices the refusal, it cannot judge it: the gate refuses on interval *width*, never on
+  the sign of the latest observation.
+
+**Determinism re-measured at n=40 — this is the entry's central finding**
+- 5 exact, 7 equivalent, **28 divergent = 70% (95% CI 54.6–81.9%, Wilson)**.
+- **19 of 28 divergences changed which tool was called**, not just arguments.
+- 0 across a fingerprint change, 0 failed to replay. n=8's 62.5% sits inside the interval.
+- Now in `ARCHITECTURE.md` §Decisions and the export, out of TODO.md.
+
+**`--preflight`** — 12 real probes, 11 green / 1 warn / 0 red. Run it at 18:50 IST.
+
+**BREAKING for Antigravity: `schema_version` is now 2.** The export's `reproducibility`
+section is renamed **`determinism`** and carries per-replay detail; `counterfactual` is new
+and additive. A reader keyed on `reproducibility` must be updated.
+
+### 3 Sep 2026 — arbiter wired, council attacked — *Claude Code*
+
+**Done**
+- `agent/arbiter.py` brought onto main from the submission worktree (it was untracked
+  there) and wired into `multi_agent.py` at the Critic-reject branch only.
+- Advisory authority enforced structurally: `proceed` only declines to return, then falls
+  through to the same RiskGate path. `test_adversarial.py` asserts this against the source.
+- Five council attacks added; 18 attacks total, 18 blocked, 0 orders (account 2 → 2).
+- `arbiter` section added to the dashboard export.
+
+**Two bugs in the module as delivered — ANTIGRAVITY PLEASE READ**
+- `log_event` was called with a positional dict; the real signature is
+  `log_event(event_type, **fields)`. That is a `TypeError` at the only moment the arbiter is
+  ever invoked. It passed 16/16 because the test mocks `log_event` as `lambda *a, **kw`,
+  so the real signature was never exercised.
+- `_parse_ruling`'s keyword fallback ruled `proceed` on any response containing that word,
+  checked before `abandon`. The arbiter's prompt embeds the Critic's rationale verbatim, so
+  injected text could flip the ruling. Removed — unparseable now means deadlock.
+- **3 of the 16 tests now fail** against the fixed module and need updating in that worktree:
+  `test_keyword_fallback_proceed`, `test_keyword_fallback_abandon` (assert the removed
+  vulnerability) and `test_arbitrate_abandon` (asserts the positional `log_event` shape).
+
+**The council is two models, not three**
+- `FEATHERLESS_API_KEY` is not set in `.env`, the shell, or the submission worktree — only
+  the placeholder in `.env.example`. The seat is reached and correctly abandons. A genuine
+  three-model cycle has never run.
+
+### 3 Sep 2026 — adversarial self-test, fill instrumentation, replay — *Claude Code*
+
+**Done**
+- `agent/adversarial.py` + `--adversarial`: 13 hostile payloads through the real RiskGate.
+  Nothing reaches Alpaca, proved by counting orders on the account either side (2 → 2).
+- `agent/fill_analysis.py`: indicative quote before submission vs simulated fill after,
+  per leg, off the critical path (quote comes from the chain already fetched).
+- `agent/replay.py` + `--replay`: every LLM call recorded whole; decisions re-runnable.
+
+**Two gate holes found and fixed**
+- `ratio_qty` was read by nothing. A buy-1/sell-2 was priced as a 1:1 vertical, so the
+  second short contract was naked and charged nothing. Now refused.
+- A contract not on the live chain was approved. The gate does no network I/O, so it now
+  takes an optional `known_contracts` set; the demonstration path supplies its chain.
+
+**The finding that matters most**
+- The first adversarial run said 13/13 blocked and was nearly worthless: six attacks died at
+  the validation gate before reaching the defence under test. Every attack now runs twice,
+  and the verdict comes from the isolated run.
+- **Replay: 2 exact, 1 equivalent, 5 divergent out of 8** — at temperature 0, fixed seed,
+  same model, *unchanged* `system_fingerprint`. One divergence flipped `get_option_chain`
+  (a read) to `place_option_order` (an order) on identical inputs. This is the strongest
+  argument in the project for the deterministic gate, and belongs in the write-up.
+- Temperature and seed were previously unset everywhere — the runs were not attempting
+  determinism at all. Now `OPENAI_TEMPERATURE=0`, `OPENAI_SEED=42`, env-overridable.
+
+**Not answered**
+- Feed-vs-fill: instrumentation is in place but both existing orders were canceled at
+  `filled_qty` 0, so there is no fill to compare. Answers on tonight's fill.
+
+### 3 Sep 2026 — autonomy and the Alpaca CLI — *Claude Code*
+
+**Done**
+- `agent/supervisor.py` — `--loop` now survives unattended. Consecutive (not cumulative)
+  failure counting, three in a row trips the kill switch; session-window rules fire on wall
+  clock from inside the loop; heartbeat every pass including idle ones; dashboard refreshed
+  every cycle; spend cap on measured cost. `--max-cycles` bounds a verification run.
+- Verified live pre-open: three real cycles a minute apart, declined "market closed" each
+  time, no LLM call, $0 spend. Six paths in `test_supervisor.py` over injected callables.
+- `agent/alpaca_cli.py` — Alpaca CLI v0.0.14 (prebuilt binary, checksum verified) is the
+  primary read path for account and positions in the dashboard export, alpaca-py the
+  fallback. `account.source` records which answered. Order placement stays on MCP.
+- Dashboard export grew a `heartbeats` section (additive, non-breaking for Antigravity).
+
+**Fixed while testing**
+- Heartbeat stamped `consecutive_failures` at the start of a pass, so a heartbeat written
+  after a recovery still reported the old count — the log read as failing when it was not.
+
+**Deadline correction — this is the important one**
+- Thursday **3 Sep is `LAST_TRADING_DAY`**, and the 19:00 IST open on 3 Sep is *Thursday's*
+  open, not Wednesday's. There is **one session left**, not two. Entries stop 15:00 ET Thu
+  (00:30 IST Fri); the book must be flat 15:45 ET Thu (01:15 IST Fri). Friday is post-NFP
+  and submission day: the loop refuses to trade at all. Anything meant to happen "tomorrow"
+  has to happen tonight.
+
 ### 2 Sep 2026 — dashboard export contract — *Claude Code*
 
 **Done**
@@ -157,12 +263,18 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
   `estimated_capital_at_risk` is therefore null on nearly every gate decision, and the
   figure is deliberately **not** regex'd back out of the rejection's prose.
 
-**Known gap, not fixed here**
-- `RiskGate._reject()` returns `{approved, reason}` only, and the `tool_call` log site does
-  not record the capital figure on an approval either. Until both are changed,
-  `gate_decisions[].estimated_capital_at_risk` stays sparse. Roughly a three-line fix across
-  `agent/risk/gates.py` and the two LLM tool-call log sites; left out because it changes the
-  order path, which was out of scope for this task.
+**Then fixed, same session, before the demonstration order fires**
+- `RiskGate._reject()` now carries the capital figure and basis, passed at all four cap
+  sites. Both LLM `tool_call` log sites record them on approvals and rejections alike.
+- The demonstration path logged **nothing** when the gate approved: `demonstration_rejected`
+  on refusal, otherwise only `demonstration_order`, which a dry run returns before reaching.
+  Dry run is the default, so the approval of the only trade this agent places was recorded
+  nowhere at all. Added `demonstration_approved`.
+- The figure is structured end to end and is never parsed back out of the `reason` prose,
+  which carries a rounded copy. Rejections thrown before capital is computed stay null, and
+  null keeps meaning "never computed", not "risked nothing".
+- Verified against the real gate: naked short put refused at **$75,500**, the defined-risk
+  spread that replaces it approved at **$423**, dry-run `--demonstrate` approval row at $419.
 
 ### 2 Sep 2026 — make the LLM paths runnable, pin the demonstration expiry — *Claude Code*
 

@@ -234,6 +234,11 @@ async def run_cycle(dry_run: bool = True) -> dict:
             result["skipped"].append(f"{SYMBOL} chain had no real contract for every leg")
             return result
 
+        # Hand the gate the chain we just fetched, so it can refuse a leg for a contract that
+        # is not actually listed. The gate does no network I/O of its own; this is the only way
+        # it can know. Found by the adversarial harness -- see agent/adversarial.py A01.
+        risk_gate.known_contracts = {q.symbol for q in chain if getattr(q, "symbol", None)}
+
         short = next(m for leg, m in zip(legs, matched) if leg.side == "sell")
 
         # Pick the protective leg to fit the risk budget rather than to hit a delta.
@@ -289,8 +294,29 @@ async def run_cycle(dry_run: bool = True) -> dict:
         if not decision.get("approved"):
             result["rejections"].append(decision.get("reason", ""))
             log_event("demonstration_rejected", reason=decision.get("reason"),
-                      payload=payload, validation_status=DEMONSTRATION_STATUS)
+                      payload=payload,
+                      estimated_capital_at_risk=decision.get("estimated_capital_at_risk"),
+                      capital_basis=decision.get("capital_basis"),
+                      validation_status=DEMONSTRATION_STATUS)
             return result
+
+        # The approval is logged here rather than only alongside a submitted order, because a
+        # dry run returns below and the demonstration trade is dry-run by default. Without
+        # this the one gate decision that matters most -- the approval of the only trade this
+        # agent places -- was recorded nowhere at all.
+        log_event("demonstration_approved", symbol=SYMBOL, payload=payload,
+                  estimated_capital_at_risk=decision.get("estimated_capital_at_risk"),
+                  capital_basis=decision.get("capital_basis"), dry_run=dry_run,
+                  validation_status=DEMONSTRATION_STATUS)
+
+        # Pre-trade indicative quotes, read from the chain already fetched above. No extra
+        # round trip and nothing new between the decision and the submission -- the cost is a
+        # timing gap, which fill_analysis measures rather than hides. Captured before the dry
+        # run returns so the dry path records what it would have compared against.
+        from agent import fill_analysis
+        quote_snapshot = fill_analysis.capture_quotes(
+            chain, [l["symbol"] for l in payload["legs"]])
+        result["pre_trade_quotes"] = quote_snapshot
 
         if dry_run:
             result["skipped"].append("dry run — payload built and approved, not submitted")
@@ -310,4 +336,19 @@ async def run_cycle(dry_run: bool = True) -> dict:
               capital_at_risk=decision.get("estimated_capital_at_risk"),
               validation_status=DEMONSTRATION_STATUS)
         result["submitted"] = True
+
+        # Everything below is measurement, after the order is already in. It cannot delay the
+        # submission and cannot fail it: record() swallows its own errors, and the order is
+        # reported as submitted regardless of whether the comparison worked.
+        order_id = None
+        try:
+            order_id = (json.loads(raw).get("data") or {}).get("id")
+        except (ValueError, AttributeError):
+            order_id = None
+        if order_id:
+            result["fill_analysis"] = fill_analysis.record(
+                order_id, quote_snapshot, context="demonstration")
+        else:
+            log_event("fill_analysis_skipped", reason="no order id in the submit response",
+                      result=raw[:500])
         return result

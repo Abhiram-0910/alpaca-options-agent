@@ -12,6 +12,7 @@ Usage:
 """
 import argparse
 import asyncio
+import json
 import sys
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -127,29 +128,19 @@ async def _manage_loop(interval_minutes: int):
         await asyncio.sleep(interval_minutes * 60)
 
 
-async def _run_loop(interval_minutes: int, max_spend: float, multi_agent: bool = False, provider: str = "openai"):
-    session_spend = 0.0
-    while True:
-        if max_spend > 0 and session_spend >= max_spend:
-            print(f"\nSession spend cap reached (${session_spend:.4f} >= ${max_spend:.2f}). Stopping.")
-            log_event("session_spend_cap_reached", session_spend_usd=round(session_spend, 5), cap_usd=max_spend)
-            alert("session_spend_cap_reached", session_spend_usd=round(session_spend, 5), cap_usd=max_spend)
-            return
-        if market_is_open():
-            try:
-                session_spend += await _run_once(multi_agent, provider)
-                print(f"Session spend so far: ${session_spend:.4f}"
-                      + (f" (cap ${max_spend:.2f})" if max_spend > 0 else ""))
-            except TradingKilled as exc:
-                print(f"{exc} Waiting for the kill switch to clear...")
-            except Exception as exc:
-                log_event("cycle_error", error=str(exc))
-                alert("cycle_error", error=str(exc))
-                print(f"Cycle failed: {exc}")
-        else:
-            print("Market closed — skipping cycle.")
-        print(f"Sleeping {interval_minutes} minutes...\n")
-        await asyncio.sleep(interval_minutes * 60)
+async def _run_loop(interval_minutes: int, max_spend: float, multi_agent: bool = False,
+                     provider: str = "openai", max_cycles: int = None):
+    """Unattended. All the failure handling and wall-clock judgement lives in
+    agent/supervisor.py — see that module's docstring for what this used to be missing."""
+    from functools import partial
+    from agent.supervisor import run_supervised
+    return await run_supervised(
+        partial(_run_once, multi_agent, provider),
+        _manage_open_positions,
+        interval_minutes=interval_minutes,
+        max_spend=max_spend,
+        max_cycles=max_cycles,
+    )
 
 
 if __name__ == "__main__":
@@ -178,6 +169,25 @@ if __name__ == "__main__":
                          help="Build the single bounded demonstration spread (see "
                               "agent/demonstration.py) and run it through the full risk gate "
                               "WITHOUT submitting. Requires DEMONSTRATION_MODE=true.")
+    parser.add_argument("--preflight", action="store_true",
+                         help="Check everything the session needs — credentials, MCP spawn, "
+                              "CLI auth, clock, chain, gate armed, kill switch, dashboard, "
+                              "expiry, disk. Green/red per line; exits non-zero on any red.")
+    parser.add_argument("--counterfactual", action="store_true",
+                         help="Price what the refused strategies would have returned, using "
+                              "the same simulator that refused them.")
+    parser.add_argument("--replay", metavar="DECISION_ID",
+                         help="Re-run a past LLM decision from its logged inputs and report "
+                              "whether it reproduces (agent/replay.py). Pass 'list' to see "
+                              "what has been recorded, or 'all' to replay the recent ones and "
+                              "write logs/replay_report.json.")
+    parser.add_argument("--adversarial", action="store_true",
+                         help="Attack the risk layer with hostile model output and report what "
+                              "stopped each attempt (agent/adversarial.py). Places no orders. "
+                              "Exits non-zero if any attack got through.")
+    parser.add_argument("--max-cycles", type=int, default=None,
+                         help="Stop --loop after this many cycles. Unbounded by default; set it "
+                              "to bound a verification run.")
     parser.add_argument("--export-dashboard", action="store_true",
                          help="Just write logs/dashboard.json from the existing logs and exit. "
                               "The file is refreshed after every other mode anyway; this is for "
@@ -198,6 +208,71 @@ if __name__ == "__main__":
 
     from agent.dashboard import export_dashboard
 
+    if args.preflight:
+        from agent.preflight import run_preflight, print_report
+        rep = asyncio.run(run_preflight())
+        print_report(rep)
+        raise SystemExit(0 if rep["ready"] else 1)
+
+    if args.counterfactual:
+        from agent.counterfactual import run_counterfactual
+        r = run_counterfactual()
+        w = r["window"]
+        print(f"Counterfactual {w['entry_date']} -> {w['mark_date']} "
+              f"({w['trading_days_held']} trading day(s))")
+        print(f"{r['pairs_refused']} refused pairs: {r['refused_profitable']} profitable, "
+              f"{r['refused_unprofitable']} not; total "
+              f"${r['total_pnl_dollars_if_all_taken']:,.2f}")
+        raise SystemExit(0)
+
+    if args.replay:
+        from agent.replay import replay, summary
+        if args.replay == "list":
+            info = summary()
+            print(f"{info['calls_recorded']} LLM calls recorded, "
+                  f"{info['distinct_decisions']} distinct decisions.")
+            print(f"Reproducibility tier: {info['reproducibility']}")
+            for c in info["calls"][-25:]:
+                print(f"  {c['decision_id']}  {c['ts']}  {c['role'] or '-':13s} "
+                      f"{c['model']}  temp={c['temperature']} seed={c['seed']}")
+            raise SystemExit(0)
+        if args.replay == "all":
+            from agent.replay import replay_many
+            rep = asyncio.run(replay_many(limit=40, repeats=1))
+            print(f"{rep['replays']} replays under {rep['conditions']}:")
+            ci = rep["divergence_rate_ci95"]
+            print(f"  exact {rep['exact']}, equivalent {rep['equivalent']}, "
+                  f"divergent {rep['divergent']} "
+                  f"({rep['across_fingerprint_change']} across a fingerprint change)")
+            print(f"  divergence rate {rep['divergence_rate']:.1%} "
+                  f"(95% CI {ci['lower']:.1%}-{ci['upper']:.1%}, {ci['method']})")
+            print(f"  of the divergences, {rep['divergent_tool_changed']} changed which tool "
+                  f"was called and {rep['divergent_args_only']} changed only the arguments")
+            for r in rep["results"]:
+                print(f"  {r['decision_id']}  {r.get('status')}")
+            print("Written to logs/replay_report.json")
+            raise SystemExit(0)
+        outcome = asyncio.run(replay(args.replay))
+        print(json.dumps(outcome, indent=2, default=str))
+        # exact/equivalent both reproduce the decision; see agent/replay.py on why prose
+        # equality is a stricter test than the one that matters.
+        raise SystemExit(0 if outcome["status"] in ("exact", "equivalent") else 1)
+
+    if args.adversarial:
+        from agent.adversarial import run_adversarial
+        report = asyncio.run(run_adversarial())
+        m = report["meta"]
+        print(f"\nAdversarial self-test — {m['attacks_run']} attacks, {m['blocked']} blocked, "
+              f"{m['got_through']} got through.")
+        for r in report["results"]:
+            mark = "BLOCKED " if not r["approved"] else "GOT THROUGH"
+            print(f"  [{mark}] {r['id']}: {r['name']}")
+            print(f"      {r['rejection_reason'] or '*** NOT REJECTED ***'}")
+        print(f"\nOrders on the account before: {m['orders_before']}, after: {m['orders_after']} "
+              f"({m['order_count_source']})")
+        print(f"Written to logs/adversarial.json")
+        raise SystemExit(1 if m["got_through"] else 0)
+
     if args.export_dashboard:
         export_dashboard()
         print("Wrote logs/dashboard.json")
@@ -215,7 +290,8 @@ if __name__ == "__main__":
             asyncio.run(_run_deterministic_once())
         elif args.loop:
             _require_api_key(args.provider)
-            asyncio.run(_run_loop(args.interval, args.max_spend, args.multi_agent, args.provider))
+            asyncio.run(_run_loop(args.interval, args.max_spend, args.multi_agent,
+                                   args.provider, args.max_cycles))
         else:
             _require_api_key(args.provider)
             asyncio.run(_run_once(args.multi_agent, args.provider))

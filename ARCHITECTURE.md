@@ -38,6 +38,28 @@ deterministic policy maps it to a concrete trade → RiskGate → MCP order → 
   below buy-and-hold once frictions were added; TrustTrade found identical inputs produce
   divergent decisions, which disqualifies a model from anything touching sizing.
   **Rejected:** letting the model pick strikes and sizes. It is what most entries will do.
+- **The model is not reproducible, and we measured it rather than citing it** — TrustTrade's
+  finding that identical inputs produce divergent decisions is the load-bearing claim behind
+  every design choice above, so it was reproduced on this system rather than borrowed. Every
+  LLM call is recorded whole (`agent/replay.py`) and `--replay` re-issues it. At temperature
+  0, a fixed seed, the same model and an **unchanged `system_fingerprint`** — the conditions
+  under which OpenAI's best-effort determinism is supposed to hold — the measured divergence
+  rate is in `logs/replay_report.json` and the export's `determinism` section, with a Wilson
+  95% interval and a count of how many divergences changed *which tool was called* rather
+  than only its arguments. One divergence flipped `get_option_chain`, a read, into
+  `place_option_order`, an order, on byte-identical inputs.
+  **This is why the gate is deterministic Python and not a prompt.** A model that can move
+  from reading data to attempting a trade without its inputs changing cannot be the thing
+  that decides whether a trade is permitted.
+  **Rejected:** claiming reproducibility because temperature is 0. Before this work,
+  temperature and seed were not even set — the runs were not merely non-reproducible, they
+  were not attempting to be.
+- **The gate is priced, not just defended** — `agent/counterfactual.py` re-runs every refused
+  strategy through the same simulator that refused it, so the refusal has a dollar figure
+  attached instead of only a rationale. It is reported whichever way it comes out. A short
+  window can only ever price the decision; it cannot judge it, because the gate refuses on
+  the *width* of the bootstrap interval and never on the sign of the latest observation. See
+  §Variance.
 - **Statistical gate before any strategy is tradeable** — kept from the original build. This
   is the strongest single asset in the codebase and maps directly onto what Alpaca's own
   skills library asks for.

@@ -76,12 +76,19 @@ async def run_cycle() -> dict:
         cycle_cost = 0.0
         final_summary = ""
         while tool_calls_made < CONFIG.max_tool_calls_per_cycle:
-            response = await client.chat.completions.create(
-                model=CONFIG.openai_model, messages=messages, tools=tools, max_tokens=2048,
-            )
+            request = {"model": CONFIG.openai_model, "messages": messages, "tools": tools,
+                       "max_tokens": 2048, "temperature": CONFIG.openai_temperature,
+                       "seed": CONFIG.openai_seed}
+            response = await client.chat.completions.create(**request)
             api_calls_made += 1
             call_cost_usd = call_cost(response.usage, CONFIG.openai_model)
             cycle_cost += call_cost_usd
+            # Full request and response to logs/llm_calls.jsonl, so this decision can be
+            # replayed from the log alone. See agent/replay.py for what that does and does
+            # not prove.
+            from agent.replay import record_call
+            record_call("openai", CONFIG.openai_model, request, response,
+                        cost_usd=round(call_cost_usd, 6), role="single_agent")
             log_event(
                 "api_call_cost", provider="openai", model=CONFIG.openai_model,
                 prompt_tokens=response.usage.prompt_tokens, completion_tokens=response.usage.completion_tokens,
@@ -141,6 +148,11 @@ async def run_cycle() -> dict:
 
                 log_event("tool_call", agent="openai", tool=name, input=tool_input,
                           approved=decision.get("approved"), reason=decision.get("reason"),
+                          # Logged on approvals AND rejections -- see the matching comment in
+                          # live_agent.py.
+                          estimated_capital_at_risk=decision.get("estimated_capital_at_risk"),
+                          capital_basis=decision.get("capital_basis"),
+                          validation_status=decision.get("validation_status"),
                           result=result_text[:2000])
                 messages.append({"role": "tool", "tool_call_id": tc.id,
                                  "content": clip_tool_result(result_text)})
