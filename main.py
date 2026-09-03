@@ -168,6 +168,10 @@ if __name__ == "__main__":
                          help="Build the single bounded demonstration spread (see "
                               "agent/demonstration.py) and run it through the full risk gate "
                               "WITHOUT submitting. Requires DEMONSTRATION_MODE=true.")
+    parser.add_argument("--adversarial", action="store_true",
+                         help="Attack the risk layer with hostile model output and report what "
+                              "stopped each attempt (agent/adversarial.py). Places no orders. "
+                              "Exits non-zero if any attack got through.")
     parser.add_argument("--max-cycles", type=int, default=None,
                          help="Stop --loop after this many cycles. Unbounded by default; set it "
                               "to bound a verification run.")
@@ -190,6 +194,21 @@ if __name__ == "__main__":
         )
 
     from agent.dashboard import export_dashboard
+
+    if args.adversarial:
+        from agent.adversarial import run_adversarial
+        report = asyncio.run(run_adversarial())
+        m = report["meta"]
+        print(f"\nAdversarial self-test — {m['attacks_run']} attacks, {m['blocked']} blocked, "
+              f"{m['got_through']} got through.")
+        for r in report["results"]:
+            mark = "BLOCKED " if not r["approved"] else "GOT THROUGH"
+            print(f"  [{mark}] {r['id']}: {r['name']}")
+            print(f"      {r['rejection_reason'] or '*** NOT REJECTED ***'}")
+        print(f"\nOrders on the account before: {m['orders_before']}, after: {m['orders_after']} "
+              f"({m['order_count_source']})")
+        print(f"Written to logs/adversarial.json")
+        raise SystemExit(1 if m["got_through"] else 0)
 
     if args.export_dashboard:
         export_dashboard()

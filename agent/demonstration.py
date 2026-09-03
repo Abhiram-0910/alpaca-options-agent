@@ -234,6 +234,11 @@ async def run_cycle(dry_run: bool = True) -> dict:
             result["skipped"].append(f"{SYMBOL} chain had no real contract for every leg")
             return result
 
+        # Hand the gate the chain we just fetched, so it can refuse a leg for a contract that
+        # is not actually listed. The gate does no network I/O of its own; this is the only way
+        # it can know. Found by the adversarial harness -- see agent/adversarial.py A01.
+        risk_gate.known_contracts = {q.symbol for q in chain if getattr(q, "symbol", None)}
+
         short = next(m for leg, m in zip(legs, matched) if leg.side == "sell")
 
         # Pick the protective leg to fit the risk budget rather than to hit a delta.

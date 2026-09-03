@@ -56,7 +56,8 @@ Consequences worth knowing before you write a chart:
   "validation":     [ ... ],
   "gate_decisions": [ ... ],
   "trades":         [ ... ],
-  "heartbeats":     { ... }
+  "heartbeats":     { ... },
+  "adversarial":    { ... }
 }
 ```
 
@@ -262,6 +263,43 @@ same empty position list; only this tells them apart.
 fired, and `null` otherwise — so a stretch of declines is attributable to a specific rule.
 Three consecutive failures trip the kill switch and stop the loop; the last heartbeat before
 that says so in `action`.
+
+---
+
+## `adversarial`
+
+The risk layer under attack by hostile model output. Written by
+`python main.py --adversarial` (`agent/adversarial.py`) into `logs/adversarial.json` and
+copied through here verbatim. Absent until that has been run, in which case every count is
+`null` and `results` is `[]` — never a clean result nobody produced.
+
+| field | type | notes |
+|---|---|---|
+| `ran_at` | ISO-8601 UTC \| null | |
+| `attacks_run` / `blocked` / `got_through` | int \| null | |
+| `masked_by_validation_gate` | int \| null | attacks the validation gate stops *before* their intended defence is reached |
+| `orders_submitted` | int \| null | must be `0`. Counted on the account either side of the run, not asserted from internal state |
+| `order_count_source` | string \| null | how that count was read |
+| `verdict_basis` | string \| null | which run the verdict comes from |
+| `results[]` | array | one record per attack |
+
+Each `results[]` entry carries `id`, `name`, `expected_to_be_stopped_because`, `verdict`
+(`"blocked"` or `"GOT THROUGH"`), `approved`, `rejection_reason`,
+`estimated_capital_at_risk`, `payload`, and where relevant a `full_stack` block.
+
+**Read `verdict` from the isolated run, and understand why.** The first run of this harness
+reported 13/13 blocked and was nearly worthless: six attacks died at the backtest-validation
+gate before ever reaching the defence they were written to test. "Nothing cleared on SPY" is
+true and says nothing about whether a 400-contract order is caught by the capital cap. So
+every attack runs twice — `full_stack` is what happens today, and the top-level verdict comes
+from an isolated run with validation satisfied and nothing else lifted, forcing each attack to
+meet its intended layer. `masked_by_validation_gate` counts how many defences are currently
+unexercised in production; if a strategy ever clears, that masking stops.
+
+Two real holes were found this way and fixed — a `ratio_qty` mismatch priced a 1×2 as a 1:1
+vertical, leaving a naked short charged nothing, and an unlisted contract was approved. The
+second is only closed when a caller supplies the chain it fetched (the gate does no network
+I/O); `results[].without_chain` records what happens when nobody does.
 
 ---
 

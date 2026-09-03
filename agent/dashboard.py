@@ -403,6 +403,33 @@ def _heartbeats_section(rows: list) -> dict:
     }
 
 
+# --- adversarial -----------------------------------------------------------
+
+def _adversarial_section(logs: str) -> dict:
+    """The self-test report, if one has been run. Copied through, never re-derived.
+
+    Absent until `python main.py --adversarial` has run; `null` fields say so rather than
+    implying a clean result nobody produced.
+    """
+    report = _read_json(os.path.join(logs, "adversarial.json"))
+    if not isinstance(report, dict) or not isinstance(report.get("results"), list):
+        return {"ran_at": None, "attacks_run": None, "blocked": None, "got_through": None,
+                "orders_submitted": None, "results": []}
+    meta = report.get("meta") or {}
+    return {
+        "ran_at": meta.get("generated_at"),
+        "attacks_run": meta.get("attacks_run"),
+        "blocked": meta.get("blocked"),
+        "got_through": meta.get("got_through"),
+        "masked_by_validation_gate": meta.get("masked_by_validation_gate"),
+        # Proof nothing reached the broker, counted on the account either side of the run.
+        "orders_submitted": meta.get("orders_submitted"),
+        "order_count_source": meta.get("order_count_source"),
+        "verdict_basis": meta.get("verdict_basis"),
+        "results": report["results"],
+    }
+
+
 # --- meta ------------------------------------------------------------------
 
 def _bootstrap_meta() -> dict:
@@ -474,6 +501,7 @@ def export_dashboard(path: str = None) -> dict:
         "gate_decisions": _gate_decisions(rows),
         "trades": _trades_section(rows, positions),
         "heartbeats": _heartbeats_section(rows),
+        "adversarial": _adversarial_section(logs),
     }
 
     os.makedirs(logs, exist_ok=True)
@@ -491,6 +519,9 @@ if __name__ == "__main__":
     print(f"  gate decisions: {len(snap['gate_decisions'])} "
           f"({sum(1 for d in snap['gate_decisions'] if not d['approved'])} rejections)")
     print(f"  trades: {len(snap['trades'])}")
+    adv = snap["adversarial"]
+    print(f"  adversarial: {adv['attacks_run']} attacks, {adv['blocked']} blocked, "
+          f"{adv['got_through']} got through, {adv['orders_submitted']} orders submitted")
     hb = snap["heartbeats"]
     print(f"  heartbeats: {hb['total_cycles']} cycles "
           f"({hb['cycles_traded']} traded, {hb['cycles_declined']} declined, "
