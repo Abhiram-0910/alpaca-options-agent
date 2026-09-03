@@ -160,6 +160,11 @@ def demo() -> None:
     assert snap["SPY260904P00999000"]["on_chain"] is False
     assert snap["SPY260904P00999000"]["mid"] is None
 
+    # captured_at is pinned rather than left as "now": comparing a live timestamp against a
+    # hardcoded fill time made this assertion pass only while the wall clock was before
+    # 14:00 UTC, and it started failing mid-session for no reason connected to the code.
+    for q in snap.values():
+        q["captured_at"] = "2026-09-03T14:00:05+00:00"
     order = {"status": "filled", "submitted_at": "2026-09-03T14:00:05+00:00", "legs": [
         {"symbol": "SPY260904P00751000", "side": "buy", "filled_avg_price": "0.52",
          "filled_qty": "1", "filled_at": "2026-09-03T14:00:06+00:00", "status": "filled"},
@@ -169,7 +174,8 @@ def demo() -> None:
     legs = compare(snap, order)
     assert legs[0]["delta"] == 0.07 and legs[0]["delta_sign"] == "above_mid", legs[0]
     assert legs[1]["delta"] == -0.06 and legs[1]["delta_sign"] == "below_mid", legs[1]
-    assert legs[0]["capture_lag_seconds"] is not None and legs[0]["capture_lag_seconds"] >= 0
+    # Deterministic now: quote captured at 14:00:05, filled at 14:00:06.
+    assert legs[0]["capture_lag_seconds"] == 1.0, legs[0]["capture_lag_seconds"]
     print(f"filled legs -> deltas {legs[0]['delta']:+.2f} ({legs[0]['delta_sign']}), "
           f"{legs[1]['delta']:+.2f} ({legs[1]['delta_sign']})")
 

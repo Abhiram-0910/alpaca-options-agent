@@ -100,6 +100,73 @@ def demonstration_status(root: str, legs: list, qty: float, equity: float = None
     return {"armed": True, "blocked": "", "max_loss_cap": cap}
 
 
+# Alpaca order statuses that mean the order is still able to fill. A demonstration order in
+# any of these is working, and a second one would stack rather than replace it.
+_LIVE_ORDER_STATUSES = {
+    "new", "accepted", "pending_new", "accepted_for_bidding", "partially_filled",
+    "held", "pending_replace", "replaced", "calculated", "stopped", "suspended",
+}
+
+
+def _order_filled_qty(order: dict) -> float:
+    try:
+        return float(order.get("filled_qty") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+async def _prior_demonstration_orders(mcp) -> list:
+    """Every order this mode has previously placed, newest first.
+
+    Identified by the client_order_id prefix rather than by symbol: the account may carry
+    unrelated SPY orders (the mleg probe did), and only orders this mode created should be
+    able to block or permit it. A read failure returns [] and the caller falls back to the
+    positions check, which is the conservative direction -- it can only allow a re-price when
+    the book is flat.
+    """
+    import json  # module-level `json` is imported inside run_cycle, not here
+    prefix = f"demo-{SYMBOL}-"
+    try:
+        raw = await mcp.call_tool("get_orders", {"status": "all", "limit": 100})
+        data = json.loads(raw).get("data", {})
+        orders = data.get("result", data) if isinstance(data, dict) else data
+        if not isinstance(orders, list):
+            return []
+    except (json.JSONDecodeError, AttributeError, TypeError, KeyError):
+        return []
+    return [o for o in orders if isinstance(o, dict)
+            and str(o.get("client_order_id") or "").startswith(prefix)]
+
+
+def _marketable_credit(short_leg, long_leg) -> tuple:
+    """Net credit at the price the spread actually crosses at, or (None, reason).
+
+    Sell the short leg at its BID, buy the long leg at its ASK -- the side of each quote a
+    taker is filled on. The previous model used mid minus mid shaded 10%, which is where a
+    resting order sits, not where it trades: attempt 1 priced 0.85 that way and never became
+    fillable in six hours.
+
+    Requires both quotes. A missing bid or ask is a contract we cannot price to fill, so the
+    candidate is skipped rather than guessed at -- these are indicative-feed quotes and a
+    fabricated side would be worse than a narrower strike choice.
+    """
+    bid = getattr(short_leg, "bid", None)
+    ask = getattr(long_leg, "ask", None)
+    if bid is None or ask is None:
+        return None, f"missing quote side (short bid={bid}, long ask={ask})"
+    try:
+        credit = round(float(bid) - float(ask), 2)
+    except (TypeError, ValueError):
+        return None, f"unparseable quote (short bid={bid!r}, long ask={ask!r})"
+    if credit <= 0:
+        # Crossing both spreads costs more than the position pays; not a credit spread at
+        # marketable prices, whatever the mids imply.
+        return None, (f"marketable credit {credit:.2f} is not positive "
+                      f"(short bid {float(bid):.2f} - long ask {float(ask):.2f})")
+    return credit, (f"short {short_leg.symbol} bid {float(bid):.2f} "
+                    f"- long {long_leg.symbol} ask {float(ask):.2f} = {credit:.2f} credit")
+
+
 def demo() -> None:
     """Self-check: the constraints that make this mode safe to leave in the repo."""
     # Patch this module's own globals, not a re-imported copy of it: run as __main__ the
@@ -130,6 +197,36 @@ def demo() -> None:
         object.__setattr__(CONFIG, "demonstration_mode", real_flag)
 
     assert demonstration_status("SPY", legs2, 1, equity=100_000)["max_loss_cap"] == 500.0
+
+    # Marketable pricing: sell the short at the BID, buy the long at the ASK. Attempt 1 used
+    # mid x 0.9, which is where an order rests rather than where it trades -- it sat above the
+    # bid for 61 minutes and was cancelled unfilled.
+    class _Q:
+        def __init__(self, symbol, bid, ask, price):
+            self.symbol, self.bid, self.ask, self.price = symbol, bid, ask, price
+
+    short_q = _Q("SPY260904P00770000", 1.15, 1.20, 1.175)
+    long_q = _Q("SPY260904P00765000", 0.35, 0.39, 0.37)
+    credit, basis = _marketable_credit(short_q, long_q)
+    assert credit == 0.76, (credit, basis)          # 1.15 bid - 0.39 ask, not 1.175 - 0.37
+    assert credit < round(short_q.price - long_q.price, 2), \
+        "the marketable credit must be below the mid-to-mid credit, never above it"
+    assert "bid 1.15" in basis and "ask 0.39" in basis, basis
+
+    # A missing quote side is skipped, never guessed at: these are indicative-feed quotes and
+    # a fabricated bid would price a trade that cannot fill.
+    assert _marketable_credit(_Q("s", None, 1.2, 1.1), long_q)[0] is None
+    assert _marketable_credit(short_q, _Q("l", 0.3, None, 0.35))[0] is None
+    # Crossing both spreads can cost more than the position pays. That is not a credit spread
+    # at marketable prices, whatever the mids say.
+    assert _marketable_credit(_Q("s", 0.40, 0.45, 0.42), _Q("l", 0.50, 0.60, 0.55))[0] is None
+
+    assert _order_filled_qty({"filled_qty": "1"}) == 1.0
+    assert _order_filled_qty({"filled_qty": None}) == 0.0
+    assert _order_filled_qty({}) == 0.0
+    print("marketable credit 0.76 from bid/ask, below the 0.81 mid-to-mid; "
+          "missing or inverted quotes refused")
+
     print("demonstration: all checks pass")
 
 
@@ -182,7 +279,18 @@ async def run_cycle(dry_run: bool = True) -> dict:
             account_info, positions = {}, []
         risk_gate.refresh(account_info, positions)
 
-        # This mode places one position, once. Anything already open means it has run.
+        # This mode places one POSITION, once. That rule is unchanged; what changed is that a
+        # cancelled unfilled order is not a position and must not be treated as one.
+        #
+        # The first attempt priced off the shaded mid at 0.85 credit, sat above the bid, never
+        # became fillable, and the loop's stale-order housekeeping cancelled it at 61 minutes.
+        # Nothing was opened and nothing was risked, so refusing a re-price would be enforcing
+        # "one order ever" when the rule is "one position ever" -- and would end the session
+        # with no demonstration at all because of a limit price.
+        #
+        # So: a re-price is allowed only when every prior demonstration order died unfilled and
+        # the book is flat. A prior FILL blocks it forever, even if that position has since
+        # been closed -- which the positions check alone would miss.
         if len(positions) >= MAX_OPEN_POSITIONS:
             result["skipped"].append(
                 f"{len(positions)} position(s) already open; demonstration mode places at most "
@@ -190,6 +298,31 @@ async def run_cycle(dry_run: bool = True) -> dict:
             log_event("demonstration_skipped", reason=result["skipped"][-1],
                       validation_status=DEMONSTRATION_STATUS)
             return result
+
+        prior = await _prior_demonstration_orders(mcp)
+        filled = [o for o in prior if _order_filled_qty(o) > 0]
+        live = [o for o in prior if (o.get("status") or "").lower() in _LIVE_ORDER_STATUSES]
+        if filled:
+            result["skipped"].append(
+                f"a prior demonstration order already filled "
+                f"({filled[0].get('client_order_id')}, {_order_filled_qty(filled[0]):g} filled); "
+                f"this mode opens one position ever and has already opened it")
+            log_event("demonstration_skipped", reason=result["skipped"][-1],
+                      validation_status=DEMONSTRATION_STATUS)
+            return result
+        if live:
+            result["skipped"].append(
+                f"a demonstration order is still working "
+                f"({live[0].get('client_order_id')}, status {live[0].get('status')}); "
+                f"cancel it before re-pricing rather than stacking a second one")
+            log_event("demonstration_skipped", reason=result["skipped"][-1],
+                      validation_status=DEMONSTRATION_STATUS)
+            return result
+        attempt = len(prior) + 1
+        if prior:
+            result["skipped"].append(
+                f"{len(prior)} prior demonstration order(s), all unfilled and cancelled/expired; "
+                f"re-pricing as attempt {attempt}")
 
         price_raw = await mcp.call_tool("get_stock_latest_trade", {"symbols": SYMBOL})
         bars_raw = await mcp.call_tool("get_stock_bars",
@@ -256,10 +389,12 @@ async def run_cycle(dry_run: bool = True) -> dict:
         for quote in chain:
             if quote.option_type != "put" or quote.strike >= short.strike:
                 continue
-            shaded = max(round((short.price - quote.price) * 0.9, 2), 0.01)
-            max_loss = (short.strike - quote.strike - shaded) * 100 * MAX_CONTRACTS
+            marketable, basis = _marketable_credit(short, quote)
+            if marketable is None:
+                continue
+            max_loss = (short.strike - quote.strike - marketable) * 100 * MAX_CONTRACTS
             if 0 < max_loss <= cap:
-                candidates.append((short.strike - quote.strike, quote, shaded))
+                candidates.append((short.strike - quote.strike, quote, marketable, basis))
         if not candidates:
             result["skipped"].append(
                 f"no {SYMBOL} {target_expiry} put below {short.strike} makes a spread inside the "
@@ -267,19 +402,24 @@ async def run_cycle(dry_run: bool = True) -> dict:
             log_event("demonstration_skipped", reason=result["skipped"][-1],
                       validation_status=DEMONSTRATION_STATUS)
             return result
-        _, long_, credit = max(candidates, key=lambda c: c[0])
+        _, long_, credit, credit_basis = max(candidates, key=lambda c: c[0])
 
-        # `credit` shades the mid by 10% to buy fill probability. These are indicative-feed
-        # marks, not OPRA, so the mid is an estimate to begin with; a demonstration that never
-        # fills demonstrates nothing, and giving up a tenth of the credit on a sub-$500
-        # position costs less than the information does.
+        # `credit` is now the MARKETABLE credit, not a shaded mid: sell the short leg at its
+        # bid, buy the long leg at its ask. That is the price at which the spread crosses
+        # immediately instead of resting. The first attempt used mid x 0.9, which sat above the
+        # bid and never became fillable -- on an indicative feed the mid is an estimate to begin
+        # with, and a demonstration that never fills demonstrates nothing. The cost is the full
+        # spread on both legs, which on a sub-$500 position is worth less than the information.
         payload = {
             "qty": str(MAX_CONTRACTS),
             "type": "limit",
             "time_in_force": "day",
             "order_class": "mleg",
             "limit_price": str(-credit),
-            "client_order_id": f"demo-{SYMBOL}-{date.today().isoformat()}",
+            # Suffixed per attempt: Alpaca rejects a duplicate client_order_id outright, so
+            # the deterministic id made a re-price impossible even when it was the right thing
+            # to do. The date still identifies the session; the suffix distinguishes attempts.
+            "client_order_id": f"demo-{SYMBOL}-{date.today().isoformat()}-r{attempt}",
             "legs": [
                 {"symbol": long_.symbol, "side": "buy", "ratio_qty": "1",
                  "position_intent": "buy_to_open"},
@@ -290,6 +430,9 @@ async def run_cycle(dry_run: bool = True) -> dict:
 
         decision = risk_gate.check("place_option_order", payload)
         result["order"] = {"payload": payload, "underlying_price": S, "expiry": str(target_expiry),
+                           "attempt": attempt, "credit_basis": credit_basis,
+                           "net_credit": credit,
+                           "credit_dollars": round(credit * 100 * MAX_CONTRACTS, 2),
                            "decision": decision}
         if not decision.get("approved"):
             result["rejections"].append(decision.get("reason", ""))
