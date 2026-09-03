@@ -261,11 +261,16 @@ async def _run_proposer_openai(client, mcp, tools, system_prompt) -> dict:
     proposal, nudged = None, False
     model = CONFIG.openai_proposer_model
     while tool_calls_made < CONFIG.max_tool_calls_per_cycle:
-        response = await client.chat.completions.create(
-            model=model, messages=messages, tools=openai_tools, max_tokens=2048,
-        )
+        request = {"model": model, "messages": messages, "tools": openai_tools,
+                   "max_tokens": 2048, "temperature": CONFIG.openai_temperature,
+                   "seed": CONFIG.openai_seed}
+        response = await client.chat.completions.create(**request)
         api_calls_made += 1
-        cost += openai_call_cost(response.usage, model)
+        call_cost = openai_call_cost(response.usage, model)
+        cost += call_cost
+        from agent.replay import record_call
+        record_call("openai", model, request, response, cost_usd=round(call_cost, 6),
+                    role="proposer")
         msg = response.choices[0].message
         messages.append(msg.model_dump(exclude_none=True))
 
@@ -315,13 +320,17 @@ async def _run_critic_openai(client, proposal: dict, backtest_summary: str) -> d
         "Review this proposal and call review_decision."
     )
     model = CONFIG.openai_critic_model
-    response = await client.chat.completions.create(
-        model=model, max_tokens=1024,
-        messages=[{"role": "system", "content": CRITIC_SYSTEM_PROMPT},
-                  {"role": "user", "content": content}],
-        tools=_to_openai_tools([REVIEW_DECISION_TOOL]),
-        tool_choice={"type": "function", "function": {"name": "review_decision"}},
-    )
+    request = {
+        "model": model, "max_tokens": 1024,
+        "temperature": CONFIG.openai_temperature, "seed": CONFIG.openai_seed,
+        "messages": [{"role": "system", "content": CRITIC_SYSTEM_PROMPT},
+                     {"role": "user", "content": content}],
+        "tools": _to_openai_tools([REVIEW_DECISION_TOOL]),
+        "tool_choice": {"type": "function", "function": {"name": "review_decision"}},
+    }
+    response = await client.chat.completions.create(**request)
+    from agent.replay import record_call
+    record_call("openai", model, request, response, role="critic")
     cost = openai_call_cost(response.usage, model)
     msg = response.choices[0].message
     verdict = {"verdict": "reject", "rationale": "Critic gave no verdict."}

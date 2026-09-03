@@ -12,6 +12,7 @@ Usage:
 """
 import argparse
 import asyncio
+import json
 import sys
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -168,6 +169,11 @@ if __name__ == "__main__":
                          help="Build the single bounded demonstration spread (see "
                               "agent/demonstration.py) and run it through the full risk gate "
                               "WITHOUT submitting. Requires DEMONSTRATION_MODE=true.")
+    parser.add_argument("--replay", metavar="DECISION_ID",
+                         help="Re-run a past LLM decision from its logged inputs and report "
+                              "whether it reproduces (agent/replay.py). Pass 'list' to see "
+                              "what has been recorded, or 'all' to replay the recent ones and "
+                              "write logs/replay_report.json.")
     parser.add_argument("--adversarial", action="store_true",
                          help="Attack the risk layer with hostile model output and report what "
                               "stopped each attempt (agent/adversarial.py). Places no orders. "
@@ -194,6 +200,34 @@ if __name__ == "__main__":
         )
 
     from agent.dashboard import export_dashboard
+
+    if args.replay:
+        from agent.replay import replay, summary
+        if args.replay == "list":
+            info = summary()
+            print(f"{info['calls_recorded']} LLM calls recorded, "
+                  f"{info['distinct_decisions']} distinct decisions.")
+            print(f"Reproducibility tier: {info['reproducibility']}")
+            for c in info["calls"][-25:]:
+                print(f"  {c['decision_id']}  {c['ts']}  {c['role'] or '-':13s} "
+                      f"{c['model']}  temp={c['temperature']} seed={c['seed']}")
+            raise SystemExit(0)
+        if args.replay == "all":
+            from agent.replay import replay_many
+            rep = asyncio.run(replay_many(limit=8))
+            print(f"{rep['replays']} replays under {rep['conditions']}:")
+            print(f"  exact {rep['exact']}, equivalent {rep['equivalent']}, "
+                  f"divergent {rep['divergent']} "
+                  f"({rep['across_fingerprint_change']} across a fingerprint change)")
+            for r in rep["results"]:
+                print(f"  {r['decision_id']}  {r.get('status')}")
+            print("Written to logs/replay_report.json")
+            raise SystemExit(0)
+        outcome = asyncio.run(replay(args.replay))
+        print(json.dumps(outcome, indent=2, default=str))
+        # exact/equivalent both reproduce the decision; see agent/replay.py on why prose
+        # equality is a stricter test than the one that matters.
+        raise SystemExit(0 if outcome["status"] in ("exact", "equivalent") else 1)
 
     if args.adversarial:
         from agent.adversarial import run_adversarial

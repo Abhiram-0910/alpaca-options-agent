@@ -465,6 +465,42 @@ def _fill_analysis_section(rows: list) -> dict:
     }
 
 
+# --- reproducibility -------------------------------------------------------
+
+def _reproducibility_section(logs: str) -> dict:
+    """What replaying past decisions actually showed.
+
+    Of the 77 agentic-trading studies audited in the 2026 literature, none reached the top
+    reproducibility tier. Neither does this, and the number below is the measurement rather
+    than the claim.
+    """
+    from agent.replay import summary
+    info = summary()
+    report = _read_json(os.path.join(logs, "replay_report.json"))
+    section = {
+        "calls_recorded": info["calls_recorded"],
+        "distinct_decisions": info["distinct_decisions"],
+        "tier": info["reproducibility"],
+        "replays": None, "exact": None, "equivalent": None, "divergent": None,
+        "across_fingerprint_change": None, "conditions": None, "replayed_at": None,
+        "results": [],
+    }
+    if isinstance(report, dict):
+        section.update({
+            "replays": report.get("replays"),
+            "exact": report.get("exact"),
+            "equivalent": report.get("equivalent"),
+            "divergent": report.get("divergent"),
+            "across_fingerprint_change": report.get("across_fingerprint_change"),
+            "conditions": report.get("conditions"),
+            "replayed_at": report.get("generated_at"),
+            "results": [{k: v for k, v in r.items()
+                          if k not in ("recorded_text", "replayed_text")}
+                         for r in (report.get("results") or [])],
+        })
+    return section
+
+
 # --- meta ------------------------------------------------------------------
 
 def _bootstrap_meta() -> dict:
@@ -538,6 +574,7 @@ def export_dashboard(path: str = None) -> dict:
         "heartbeats": _heartbeats_section(rows),
         "adversarial": _adversarial_section(logs),
         "fill_analysis": _fill_analysis_section(rows),
+        "reproducibility": _reproducibility_section(logs),
     }
 
     os.makedirs(logs, exist_ok=True)
@@ -555,6 +592,9 @@ if __name__ == "__main__":
     print(f"  gate decisions: {len(snap['gate_decisions'])} "
           f"({sum(1 for d in snap['gate_decisions'] if not d['approved'])} rejections)")
     print(f"  trades: {len(snap['trades'])}")
+    rp = snap["reproducibility"]
+    print(f"  reproducibility: {rp['calls_recorded']} calls recorded; replays "
+          f"{rp['exact']} exact / {rp['equivalent']} equivalent / {rp['divergent']} divergent")
     fa = snap["fill_analysis"]
     print(f"  fill analysis: {fa['orders_measured']} orders, {fa['legs_filled']}/"
           f"{fa['legs_measured']} legs filled, mean delta {fa['mean_delta']}")

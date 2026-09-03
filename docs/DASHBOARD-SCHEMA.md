@@ -58,7 +58,8 @@ Consequences worth knowing before you write a chart:
   "trades":         [ ... ],
   "heartbeats":     { ... },
   "adversarial":    { ... },
-  "fill_analysis":  { ... }
+  "fill_analysis":  { ... },
+  "reproducibility":{ ... }
 }
 ```
 
@@ -332,6 +333,40 @@ latency is free.
 
 An unfilled or canceled leg yields `filled_price: null` and `delta: null`. No zero is ever
 fabricated, and an unfilled leg is not averaged into `mean_delta` as though it filled at mid.
+
+---
+
+## `reproducibility`
+
+What replaying past decisions actually showed. Written from `logs/llm_calls.jsonl` (every
+LLM call recorded whole) and `logs/replay_report.json` (`python main.py --replay all`).
+
+| field | type | notes |
+|---|---|---|
+| `calls_recorded` / `distinct_decisions` | int | |
+| `tier` | string | the reproducibility tier actually reached |
+| `replays` / `exact` / `equivalent` / `divergent` | int \| null | `null` until a replay has been run |
+| `across_fingerprint_change` | int \| null | replays where OpenAI's `system_fingerprint` moved between record and replay |
+| `conditions` | string \| null | the settings the replay ran under |
+| `results[]` | array | per-decision outcomes |
+
+Three outcomes: `exact` (identical text and tool calls), `equivalent` (same tool calls with
+the same arguments, different prose), `divergent` (different action). `equivalent` is the
+honest target — an agent that picks the same trade for differently-worded reasons has
+reproduced its decision, and demanding identical prose would test something we do not care
+about. A replay that could not be issued at all is `replay_failed` and is excluded from the
+counts rather than scored as a divergence.
+
+**The measured result, and it is the point of this section.** Under temperature 0, a fixed
+seed, the same model and an *unchanged* `system_fingerprint` — the conditions under which
+OpenAI's best-effort determinism is supposed to hold — 8 replays returned **2 exact, 1
+equivalent, 5 divergent**. One divergence flipped from `get_option_chain`, a read, to
+`place_option_order`, an order, on identical inputs.
+
+That is the strongest argument in this project for putting every order behind a
+deterministic gate: the model is not reproducible even under ideal conditions, and the same
+prompt can move it from reading data to attempting a trade. A replay only re-issues the
+request to the model; it never executes what comes back.
 
 ---
 

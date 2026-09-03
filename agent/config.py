@@ -35,6 +35,13 @@ class Config:
     # agent/openai_cost.py, so cycle cost stays measured rather than falling back to the
     # gpt-4o-mini rate and silently under-reporting. Stronger models are available on this key
     # (gpt-5.x, o3); using one means adding its verified price to that table first.
+    # Reproducibility knobs (agent/replay.py). Both were previously unset, so every call ran
+    # at the API default temperature of 1.0 with no seed -- the runs were not merely
+    # non-reproducible, they were not even attempting to be. Temperature 0 and a fixed seed
+    # are the closest this gets; OpenAI's seed is best-effort and holds only within one
+    # system_fingerprint, so this buys replayability, not determinism.
+    openai_temperature: float = float(os.getenv("OPENAI_TEMPERATURE", "0"))
+    openai_seed: int = int(os.getenv("OPENAI_SEED", "42"))
     openai_proposer_model: str = os.getenv("OPENAI_PROPOSER_MODEL", "gpt-4o-mini")
     openai_critic_model: str = os.getenv("OPENAI_CRITIC_MODEL", "gpt-4o")
 
