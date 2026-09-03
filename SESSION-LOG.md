@@ -21,6 +21,53 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
 
 ## Sessions
 
+### 3 Sep 2026 — demonstration filled; first feed-vs-fill measurement — *Claude Code*
+
+**The order filled.** `demo-SPY-2026-09-03-r2`, 15:58:51 UTC, both legs, net credit 0.70
+at exactly the submitted limit. Short SPY260904P00770000 at 1.06, long SPY260904P00765000
+at 0.36. Max loss $430. Position open on the judged account; the loop flattens it 15:45 ET.
+
+Attempt 1 (0.85, priced off the shaded mid) never became fillable and was cancelled by the
+loop's own stale-order housekeeping at 61 minutes. Attempt 2 priced at the marketable sides
+and filled in 121 ms.
+
+**Feed vs fill — what the data says, and what it does not**
+
+| leg | bid | ask | mid | fill | vs mid | vs the side we traded |
+|---|---|---|---|---|---|---|
+| long 765P (buy) | 0.37 | 0.38 | 0.375 | 0.36 | −0.015 | paid 0.02 **below** the ask — favourable |
+| short 770P (sell) | 1.08 | 1.09 | 1.085 | 1.06 | −0.025 | got 0.02 **below** the bid — adverse |
+
+`mean_delta` is now −0.02, `legs_below_mid` 2, `legs_above_mid` 0.
+
+**Correction to the first reading of this.** It is not "both legs adverse". Both legs
+printed ~2c *lower in price*, which is adverse on the leg we sold and **favourable** on the
+leg we bought. On a spread those offset: predicted net from the marketable sides was
+1.08 − 0.38 = **0.70**, actual net was 1.06 − 0.36 = **0.70**. Identical. There was no net
+slippage at all.
+
+**What it suggests.** Both fills printed below the quoted *bid* on both contracts — outside
+the indicative quote on the same side. A single coherent explanation fits: the engine's SPY
+reference sat slightly higher than the feed's snapshot, which prices both puts lower.
+
+**What it cannot establish.** Four reasons, and all four matter:
+1. **n=1.** Two legs of one order, same underlying, same instant, same direction — that is
+   one observation, not two. They are not independent.
+2. **A 1.149 s capture lag.** The quote was read 1.15 s before the fill. SPY moves enough in
+   1.15 s to shift a 1-DTE put by 2c on its own. This confound alone explains the result and
+   cannot be separated from "the engine uses fresher data" with one fill.
+3. **The net is censored.** A marketable *limit* order cannot fill worse than its limit, so
+   an adverse net outcome is unobservable by construction — it would simply not fill. This
+   design can only ever detect price improvement, and it detected none.
+4. **Indicative feed both sides.** The "expected" prices are themselves from a derived,
+   deliberately randomised product, not OPRA.
+
+**Do not write "systematic bias" anywhere.** The defensible claim is narrower and still
+worth having: *we instrumented it, and on the one fill available the net executed exactly at
+the marketable-side prediction, with per-leg prints ~2c below the indicative quote in a
+direction that offsets on a spread.* Establishing anything systematic needs many fills across
+sessions and a capture lag far below one second.
+
 ### 3 Sep 2026 — arbiter seat reached; council attacked live — *Claude Code*
 
 **The default arbiter model was unusable.** The key authenticates fine, but every

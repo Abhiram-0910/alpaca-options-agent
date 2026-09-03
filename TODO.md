@@ -6,6 +6,11 @@ Read at session start. Updated at session end.
 
 ## Now — blocking, do in this order
 
+- [x] Demonstration order FILLED 15:58:51 UTC — 770P/765P, 0.70 credit, $430 max loss (3 Sep)
+- [ ] Do not touch the position. The loop flattens it at 15:45 ET / 01:15 IST. Verify only.
+- [ ] Feed-vs-fill: write it up as **n=1, no net slippage**, not as a systematic bias. The
+      1.15 s capture lag and the limit-price censoring both have to be stated.
+
 - [ ] **ONE SESSION LEFT.** Thu 3 Sep is `LAST_TRADING_DAY`. Entries stop 15:00 ET Thu
       (00:30 IST Fri), flat by 15:45 ET Thu (01:15 IST Fri). Friday the loop refuses to
       trade. The demonstration order must be placed tonight or not at all.

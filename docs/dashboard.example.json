@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
   "meta": {
-    "generated_at": "2026-09-03T10:33:56.062008+00:00",
+    "generated_at": "2026-09-03T17:07:44.198382+00:00",
     "data_feed": "Alpaca Indicative Pricing Feed, not OPRA",
-    "engine_commit": "cea55e3",
+    "engine_commit": "6989a2f",
     "paper_trading": true,
     "bootstrap": {
       "method": "percentile bootstrap; circular moving-block where trades overlap",
@@ -27,13 +27,13 @@
     "pairs_passing_primary_gate": 1
   },
   "account": {
-    "equity": 100000.0,
+    "equity": 99995.95,
     "last_equity": 100000.0,
-    "buying_power": 400000.0,
-    "options_buying_power": 100000.0,
-    "open_position_count": 0,
+    "buying_power": 398279.8,
+    "options_buying_power": 99569.95,
+    "open_position_count": 2,
     "account_number": "PA314K6MBKHZ",
-    "timestamp": "2026-09-03T10:33:56.057851+00:00",
+    "timestamp": "2026-09-03T17:07:44.186530+00:00",
     "source": "alpaca-cli",
     "source_version": "0.0.14",
     "error": null
@@ -751,6 +751,61 @@
       "symbol": "SPY260904P00750000"
     },
     {
+      "ts": "2026-09-03T15:58:50.791543+00:00",
+      "approved": true,
+      "tool": "place_option_order",
+      "agent": "demonstration",
+      "reason": null,
+      "estimated_capital_at_risk": 430.0,
+      "capital_basis": "(5.00 width - 0.70 credit) x 100 x 1",
+      "validation_status": "UNVALIDATED_DEMONSTRATION",
+      "symbol": "SPY260904P00765000"
+    },
+    {
+      "ts": "2026-09-03T15:50:29.982746+00:00",
+      "approved": true,
+      "tool": "place_option_order",
+      "agent": "demonstration",
+      "reason": null,
+      "estimated_capital_at_risk": 429.0,
+      "capital_basis": "(5.00 width - 0.71 credit) x 100 x 1",
+      "validation_status": "UNVALIDATED_DEMONSTRATION",
+      "symbol": "SPY260904P00765000"
+    },
+    {
+      "ts": "2026-09-03T15:50:00.603006+00:00",
+      "approved": true,
+      "tool": "place_option_order",
+      "agent": "demonstration",
+      "reason": null,
+      "estimated_capital_at_risk": 424.0,
+      "capital_basis": "(5.00 width - 0.76 credit) x 100 x 1",
+      "validation_status": "UNVALIDATED_DEMONSTRATION",
+      "symbol": "SPY260904P00765000"
+    },
+    {
+      "ts": "2026-09-03T12:47:01.021118+00:00",
+      "approved": true,
+      "tool": "place_option_order",
+      "agent": "demonstration",
+      "reason": null,
+      "estimated_capital_at_risk": 415.0,
+      "capital_basis": "(5.00 width - 0.85 credit) x 100 x 1",
+      "validation_status": "UNVALIDATED_DEMONSTRATION",
+      "symbol": "SPY260904P00757000"
+    },
+    {
+      "ts": "2026-09-03T12:46:14.093939+00:00",
+      "approved": true,
+      "tool": "place_option_order",
+      "agent": "demonstration",
+      "reason": null,
+      "estimated_capital_at_risk": 415.0,
+      "capital_basis": "(5.00 width - 0.85 credit) x 100 x 1",
+      "validation_status": "UNVALIDATED_DEMONSTRATION",
+      "symbol": "SPY260904P00757000"
+    },
+    {
       "ts": "2026-09-03T10:33:10.713188+00:00",
       "approved": true,
       "tool": "place_option_order",
@@ -1345,12 +1400,52 @@
       "symbol": null
     }
   ],
-  "trades": [],
+  "trades": [
+    {
+      "ts": "2026-09-03T15:58:51.044685+00:00",
+      "event": "demonstration_order",
+      "symbol": "SPY",
+      "strategy": null,
+      "validation_status": "UNVALIDATED_DEMONSTRATION",
+      "legs": [
+        "SPY260904P00765000",
+        "SPY260904P00770000"
+      ],
+      "entry_credit": 0.7,
+      "limit_price": -0.7,
+      "capital_at_risk": 430.0,
+      "capital_basis": "(5.00 width - 0.70 credit) x 100 x 1",
+      "open": true,
+      "current_mark": {
+        "SPY260904P00765000": 0.31,
+        "SPY260904P00770000": 1.05
+      },
+      "error": null
+    },
+    {
+      "ts": "2026-09-03T12:47:01.263264+00:00",
+      "event": "demonstration_order",
+      "symbol": "SPY",
+      "strategy": null,
+      "validation_status": "UNVALIDATED_DEMONSTRATION",
+      "legs": [
+        "SPY260904P00757000",
+        "SPY260904P00762000"
+      ],
+      "entry_credit": 0.85,
+      "limit_price": -0.85,
+      "capital_at_risk": 415.0,
+      "capital_basis": "(5.00 width - 0.85 credit) x 100 x 1",
+      "open": false,
+      "current_mark": null,
+      "error": null
+    }
+  ],
   "heartbeats": {
-    "last_seen_at": "2026-09-03T02:17:19.008605+00:00",
-    "total_cycles": 3,
-    "cycles_traded": 0,
-    "cycles_declined": 3,
+    "last_seen_at": "2026-09-03T16:52:26.116932+00:00",
+    "total_cycles": 22,
+    "cycles_traded": 13,
+    "cycles_declined": 9,
     "cycles_failed": 0,
     "recent": [
       {
@@ -1389,6 +1484,253 @@
         "must_be_flat": null,
         "cycle_cost_usd": 0.0,
         "session_spend_usd": 0.0,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T12:38:53.678568+00:00",
+        "cycle": 1,
+        "action": "declined: market closed",
+        "market_open": false,
+        "traded": false,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.0,
+        "session_spend_usd": 0.0,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T12:43:32.647448+00:00",
+        "cycle": 1,
+        "action": "declined: market closed",
+        "market_open": false,
+        "traded": false,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.0,
+        "session_spend_usd": 0.0,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T12:44:21.792070+00:00",
+        "cycle": 1,
+        "action": "declined: market closed",
+        "market_open": false,
+        "traded": false,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.0,
+        "session_spend_usd": 0.0,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T12:59:24.276752+00:00",
+        "cycle": 2,
+        "action": "declined: market closed",
+        "market_open": false,
+        "traded": false,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.0,
+        "session_spend_usd": 0.0,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T13:14:26.804749+00:00",
+        "cycle": 3,
+        "action": "declined: market closed",
+        "market_open": false,
+        "traded": false,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.0,
+        "session_spend_usd": 0.0,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T13:29:29.282276+00:00",
+        "cycle": 4,
+        "action": "declined: market closed",
+        "market_open": false,
+        "traded": false,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.0,
+        "session_spend_usd": 0.0,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T13:45:02.191909+00:00",
+        "cycle": 5,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.01399,
+        "session_spend_usd": 0.01399,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T14:00:33.173758+00:00",
+        "cycle": 6,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.01316,
+        "session_spend_usd": 0.02715,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T14:16:14.773412+00:00",
+        "cycle": 7,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.02379,
+        "session_spend_usd": 0.05094,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T14:31:50.387992+00:00",
+        "cycle": 8,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.01258,
+        "session_spend_usd": 0.06352,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T14:47:24.866094+00:00",
+        "cycle": 9,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.01268,
+        "session_spend_usd": 0.0762,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:02:51.682882+00:00",
+        "cycle": 10,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.01279,
+        "session_spend_usd": 0.08899,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:18:37.333259+00:00",
+        "cycle": 11,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.02473,
+        "session_spend_usd": 0.11372,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:34:33.662614+00:00",
+        "cycle": 12,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.01328,
+        "session_spend_usd": 0.127,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:50:09.701260+00:00",
+        "cycle": 13,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.01327,
+        "session_spend_usd": 0.14027,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T16:05:35.011109+00:00",
+        "cycle": 14,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.01282,
+        "session_spend_usd": 0.15309,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T16:21:13.703886+00:00",
+        "cycle": 15,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.01291,
+        "session_spend_usd": 0.166,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T16:36:48.290787+00:00",
+        "cycle": 16,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.01265,
+        "session_spend_usd": 0.17865,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T16:52:26.116932+00:00",
+        "cycle": 17,
+        "action": "ran a full cycle",
+        "market_open": true,
+        "traded": true,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.01386,
+        "session_spend_usd": 0.19251,
         "consecutive_failures": 0,
         "error": null
       }
@@ -1958,20 +2300,109 @@
     ]
   },
   "fill_analysis": {
-    "orders_measured": 0,
-    "legs_measured": 0,
-    "legs_filled": 0,
-    "mean_delta": null,
+    "orders_measured": 2,
+    "legs_measured": 4,
+    "legs_filled": 2,
+    "mean_delta": -0.02,
     "legs_above_mid": 0,
-    "legs_below_mid": 0,
+    "legs_below_mid": 2,
     "legs_at_mid": 0,
     "delta_sign_convention": "positive = fill printed above the indicative mid we could see",
     "feed": "Alpaca Indicative Pricing Feed, not OPRA",
-    "orders": []
+    "orders": [
+      {
+        "ts": "2026-09-03T12:47:02.045714+00:00",
+        "order_id": "d3fd1026-b2b0-4a50-853a-a563dde2ef02",
+        "context": "demonstration",
+        "order_status": "accepted",
+        "legs_filled": 0,
+        "error": null,
+        "legs": [
+          {
+            "symbol": "SPY260904P00757000",
+            "side": "buy",
+            "position_intent": "buy_to_open",
+            "indicative_bid": 0.56,
+            "indicative_ask": 0.61,
+            "indicative_mid": 0.585,
+            "quote_captured_at": "2026-09-03T12:47:01.021398+00:00",
+            "on_chain": true,
+            "filled_price": null,
+            "filled_qty": 0.0,
+            "filled_at": null,
+            "status": "accepted",
+            "delta": null,
+            "delta_sign": null,
+            "capture_lag_seconds": 0.93
+          },
+          {
+            "symbol": "SPY260904P00762000",
+            "side": "sell",
+            "position_intent": "sell_to_open",
+            "indicative_bid": 1.52,
+            "indicative_ask": 1.54,
+            "indicative_mid": 1.53,
+            "quote_captured_at": "2026-09-03T12:47:01.021398+00:00",
+            "on_chain": true,
+            "filled_price": null,
+            "filled_qty": 0.0,
+            "filled_at": null,
+            "status": "accepted",
+            "delta": null,
+            "delta_sign": null,
+            "capture_lag_seconds": 0.93
+          }
+        ]
+      },
+      {
+        "ts": "2026-09-03T15:58:51.815281+00:00",
+        "order_id": "a97ccf43-4a73-47b6-a62e-42e4854f9af7",
+        "context": "demonstration",
+        "order_status": "filled",
+        "legs_filled": 2,
+        "error": null,
+        "legs": [
+          {
+            "symbol": "SPY260904P00765000",
+            "side": "buy",
+            "position_intent": "buy_to_open",
+            "indicative_bid": 0.37,
+            "indicative_ask": 0.38,
+            "indicative_mid": 0.375,
+            "quote_captured_at": "2026-09-03T15:58:50.791780+00:00",
+            "on_chain": true,
+            "filled_price": 0.36,
+            "filled_qty": 1.0,
+            "filled_at": "2026-09-03T15:58:51.940469352Z",
+            "status": "filled",
+            "delta": -0.015,
+            "delta_sign": "below_mid",
+            "capture_lag_seconds": 1.149
+          },
+          {
+            "symbol": "SPY260904P00770000",
+            "side": "sell",
+            "position_intent": "sell_to_open",
+            "indicative_bid": 1.08,
+            "indicative_ask": 1.09,
+            "indicative_mid": 1.085,
+            "quote_captured_at": "2026-09-03T15:58:50.791780+00:00",
+            "on_chain": true,
+            "filled_price": 1.06,
+            "filled_qty": 1.0,
+            "filled_at": "2026-09-03T15:58:51.940475842Z",
+            "status": "filled",
+            "delta": -0.025,
+            "delta_sign": "below_mid",
+            "capture_lag_seconds": 1.149
+          }
+        ]
+      }
+    ]
   },
   "determinism": {
-    "calls_recorded": 18,
-    "distinct_decisions": 16,
+    "calls_recorded": 58,
+    "distinct_decisions": 47,
     "tier": "inputs fully recorded and re-runnable; not bitwise deterministic -- OpenAI's seed is best-effort and holds only within one system_fingerprint",
     "replays": 40,
     "exact": 5,
@@ -3911,109 +4342,19 @@
     ]
   },
   "arbiter": {
-    "consulted": 13,
+    "consulted": 34,
     "unavailable": 1,
     "rulings": {
-      "proceed": 3,
-      "abandon": 7,
-      "deadlock": 3
+      "proceed": 5,
+      "abandon": 24,
+      "deadlock": 5
     },
-    "overruled_critic": 3,
+    "overruled_critic": 5,
     "model": "Qwen/Qwen2.5-7B-Instruct",
     "authority": "advisory only \u2014 a 'proceed' ruling does not execute anything, it only declines to end the cycle, and control then falls through to the same strategy cross-check and RiskGate.check() a Critic approval reaches",
     "invoked_when": "the Critic rejects a trade the Proposer proposed, and only then",
     "fails_closed": "any ruling other than 'proceed' \u2014 including an unparseable or empty response, a timeout, or an absent API key \u2014 leaves the veto standing",
     "recent": [
-      {
-        "ts": "2026-09-03T10:21:37.504078+00:00",
-        "ruling": "abandon",
-        "rationale": "No backtest evidence provided for AAPL, and the strategy is not validated.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 2705,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T10:24:45.780950+00:00",
-        "ruling": "proceed",
-        "rationale": "The strategy is validated and the position size is acceptable.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 2679,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "vertical_credit_spread_2d",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T10:24:46.864392+00:00",
-        "ruling": "deadlock",
-        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
-        "model": "this-model-does-not-exist/nope-0B",
-        "latency_ms": 752,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": null,
-        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
-      },
-      {
-        "ts": "2026-09-03T10:24:48.488590+00:00",
-        "ruling": "abandon",
-        "rationale": "The symbol SPY has not passed the backtest validation gate, making the strategy unvalidated.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 1622,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "vertical_credit_spread_2d",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T10:24:50.151462+00:00",
-        "ruling": "abandon",
-        "rationale": "The symbol SPY has not passed the backtest validation gate, making the strategy unvalidated.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 1661,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "naked_call",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T10:32:07.034230+00:00",
-        "ruling": "proceed",
-        "rationale": "The strategy is validated and the position size is acceptable.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 2311,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "vertical_credit_spread_2d",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T10:32:08.620842+00:00",
-        "ruling": "deadlock",
-        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
-        "model": "this-model-does-not-exist/nope-0B",
-        "latency_ms": 909,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": null,
-        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
-      },
-      {
-        "ts": "2026-09-03T10:32:11.579477+00:00",
-        "ruling": "abandon",
-        "rationale": "The symbol SPY has not passed the backtest validation gate, making the strategy unvalidated.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 2957,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "vertical_credit_spread_2d",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T10:32:14.523061+00:00",
-        "ruling": "abandon",
-        "rationale": "The symbol SPY has not passed the backtest validation gate, making the strategy unvalidated and thus incorrect to proceed with.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 2942,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "naked_call",
-        "error": null
-      },
       {
         "ts": "2026-09-03T10:32:37.370577+00:00",
         "ruling": "proceed",
@@ -4052,6 +4393,216 @@
         "latency_ms": 3148,
         "proposal_symbol": "SPY",
         "proposal_strategy": "naked_call",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T13:45:00.454811+00:00",
+        "ruling": "abandon",
+        "rationale": "The proposal contains factual errors in the option symbol and delta, and there is no backtest evidence for the strategy on AAPL.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 3770,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T14:00:31.378827+00:00",
+        "ruling": "abandon",
+        "rationale": "The proposal lacks backtest evidence and contains a potentially incorrect option symbol, violating validation requirements.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 2129,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T14:16:13.077269+00:00",
+        "ruling": "abandon",
+        "rationale": "The proposal lacks backtest evidence for AAPL, which is essential for validation.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 2105,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T14:31:48.436237+00:00",
+        "ruling": "abandon",
+        "rationale": "The proposal lacks backtest evidence and does not adequately address the risks associated with the significant lawsuit on AAPL.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 6306,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T14:47:23.141439+00:00",
+        "ruling": "abandon",
+        "rationale": "No backtest evidence provided for AAPL, and the rationale does not address the critical concerns raised by the Critic.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 5813,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:02:49.867949+00:00",
+        "ruling": "abandon",
+        "rationale": "The proposal lacks critical details such as delta, account buying power, and specific market condition data, which are necessary for a validated strategy.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 2273,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:18:35.655253+00:00",
+        "ruling": "abandon",
+        "rationale": "The proposal does not cite backtest evidence for AAPL and the strategy is not validated, as per the provided backtest results.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 2385,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:34:30.327195+00:00",
+        "ruling": "abandon",
+        "rationale": "No backtest evidence provided for AAPL and the strategy is not validated.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 3377,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:50:07.591606+00:00",
+        "ruling": "abandon",
+        "rationale": "No backtest evidence provided for AAPL, and the symbol is treated as unproven.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 5460,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:51:09.690297+00:00",
+        "ruling": "proceed",
+        "rationale": "The strategy is validated and the position size is acceptable.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 14660,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:51:11.277380+00:00",
+        "ruling": "deadlock",
+        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "model": "this-model-does-not-exist/nope-0B",
+        "latency_ms": 582,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": null,
+        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
+      },
+      {
+        "ts": "2026-09-03T15:51:15.357308+00:00",
+        "ruling": "abandon",
+        "rationale": "The symbol SPY has not passed the backtest validation gate, making the strategy unvalidated and subject to additional caution.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 4079,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:51:19.291420+00:00",
+        "ruling": "abandon",
+        "rationale": "The symbol SPY has no validated strategy; trade it only with extra caution.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 3933,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "naked_call",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:52:30.270477+00:00",
+        "ruling": "proceed",
+        "rationale": "The strategy is validated and the position size is acceptable.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 6517,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:52:31.512235+00:00",
+        "ruling": "deadlock",
+        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "model": "this-model-does-not-exist/nope-0B",
+        "latency_ms": 551,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": null,
+        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
+      },
+      {
+        "ts": "2026-09-03T15:52:34.413161+00:00",
+        "ruling": "abandon",
+        "rationale": "The symbol SPY has not passed the backtest validation gate, making the strategy unvalidated and subject to extra caution.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 2900,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T15:52:37.325865+00:00",
+        "ruling": "abandon",
+        "rationale": "The symbol SPY is unvalidated, as per the validation evidence provided.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 2911,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "naked_call",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T16:05:33.174190+00:00",
+        "ruling": "abandon",
+        "rationale": "AAPL is unvalidated and no backtest evidence was provided, violating risk management guidelines.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 2575,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T16:21:11.919849+00:00",
+        "ruling": "abandon",
+        "rationale": "AAPL is not listed as a symbol with a validated strategy, and the proposal lacks backtest evidence.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 10223,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T16:36:46.477240+00:00",
+        "ruling": "abandon",
+        "rationale": "The proposal lacks backtest evidence and the strategy for AAPL is not validated.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 5466,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T16:52:24.293899+00:00",
+        "ruling": "abandon",
+        "rationale": "The proposal lacks backtest evidence and AAPL is not a validated symbol, violating the validation process.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 5912,
+        "proposal_symbol": "AAPL",
+        "proposal_strategy": "cash_secured_put",
         "error": null
       }
     ],
