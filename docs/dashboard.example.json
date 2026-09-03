@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "meta": {
-    "generated_at": "2026-09-02T15:54:15.258979+00:00",
+    "generated_at": "2026-09-03T02:21:17.865351+00:00",
     "data_feed": "Alpaca Indicative Pricing Feed, not OPRA",
-    "engine_commit": "de5369d",
+    "engine_commit": "a444230",
     "paper_trading": true,
     "bootstrap": {
       "method": "percentile bootstrap; circular moving-block where trades overlap",
@@ -33,7 +33,7 @@
     "options_buying_power": 100000.0,
     "open_position_count": 0,
     "account_number": "PA314K6MBKHZ",
-    "timestamp": "2026-09-02T15:54:13.959653+00:00",
+    "timestamp": "2026-09-03T02:21:16.558166+00:00",
     "error": null
   },
   "validation": [
@@ -815,5 +815,53 @@
       "symbol": null
     }
   ],
-  "trades": []
+  "trades": [],
+  "heartbeats": {
+    "last_seen_at": "2026-09-03T02:17:19.008605+00:00",
+    "total_cycles": 3,
+    "cycles_traded": 0,
+    "cycles_declined": 3,
+    "cycles_failed": 0,
+    "recent": [
+      {
+        "ts": "2026-09-03T02:15:15.399132+00:00",
+        "cycle": 1,
+        "action": "declined: market closed",
+        "market_open": false,
+        "traded": false,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.0,
+        "session_spend_usd": 0.0,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T02:16:17.174795+00:00",
+        "cycle": 2,
+        "action": "declined: market closed",
+        "market_open": false,
+        "traded": false,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.0,
+        "session_spend_usd": 0.0,
+        "consecutive_failures": 0,
+        "error": null
+      },
+      {
+        "ts": "2026-09-03T02:17:19.008605+00:00",
+        "cycle": 3,
+        "action": "declined: market closed",
+        "market_open": false,
+        "traded": false,
+        "entries_blocked": null,
+        "must_be_flat": null,
+        "cycle_cost_usd": 0.0,
+        "session_spend_usd": 0.0,
+        "consecutive_failures": 0,
+        "error": null
+      }
+    ]
+  }
 }

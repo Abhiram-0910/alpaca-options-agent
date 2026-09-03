@@ -34,10 +34,14 @@ def demo() -> None:
         with open(out, encoding="utf-8") as f:
             reloaded = json.load(f)
         assert reloaded == json.loads(json.dumps(snap, default=str)), "file and return value disagree"
-        for key in ("schema_version", "meta", "account", "validation", "gate_decisions", "trades"):
+        for key in ("schema_version", "meta", "account", "validation", "gate_decisions",
+                     "trades", "heartbeats"):
             assert key in snap, f"empty export is missing top-level key {key!r}"
         assert snap["validation"] == [], snap["validation"]
         assert snap["gate_decisions"] == [] and snap["trades"] == []
+        # No heartbeats yet must read as "never seen", not as a zero-cycle success.
+        assert snap["heartbeats"]["last_seen_at"] is None, snap["heartbeats"]
+        assert snap["heartbeats"]["total_cycles"] == 0
         assert snap["meta"]["distinct_pairs_evaluated"] == 0
         assert snap["meta"]["total_validation_records"] == 0
         # No credentials must degrade to nulls with a stated reason, never to a fake balance.
@@ -91,6 +95,17 @@ def demo() -> None:
                                 "validation_status": "UNVALIDATED_DEMONSTRATION",
                                 "payload": {"limit_price": "-0.77", "legs": [
                                     {"symbol": "SPY260904P00751000"}]}}) + "\n")
+            # Two heartbeats: one that declined and one that failed. This is what makes a
+            # quiet stretch provably a decision rather than a switched-off agent.
+            f.write(json.dumps({"ts": "2026-09-02T09:30:00+00:00", "type": "heartbeat",
+                                "cycle": 1, "action": "declined: market closed",
+                                "market_open": False, "traded": False,
+                                "session_spend_usd": 0.0}) + "\n")
+            f.write(json.dumps({"ts": "2026-09-02T09:45:00+00:00", "type": "heartbeat",
+                                "cycle": 2, "action": "cycle failed (1/3 consecutive)",
+                                "market_open": True, "traded": False,
+                                "consecutive_failures": 1,
+                                "error": "TimeoutError: MCP call timed out"}) + "\n")
             f.write("{ this line is truncated\n")
 
         snap = _export_with_logs_dir(tmp)
@@ -139,9 +154,16 @@ def demo() -> None:
         assert "$75,500" in big["reason"], big
         assert big["capital_basis"] is None, big
 
+        hb = snap["heartbeats"]
+        assert hb["total_cycles"] == 2 and hb["cycles_declined"] == 1, hb
+        # A failed cycle is neither a trade nor a decline -- it is its own state.
+        assert hb["cycles_failed"] == 1 and hb["cycles_traded"] == 0, hb
+        assert hb["last_seen_at"] == "2026-09-02T09:45:00+00:00", hb
+
         print("populated logs/ -> 1 distinct pair vs 4 records, passed-primary-gate 1 but "
               "cleared 0, rejections first, capital column $75,500 refused vs $423 approved, "
-              "truncated line skipped, uncomputed CIs null")
+              "truncated line skipped, uncomputed CIs null, "
+              f"{hb['total_cycles']} heartbeats ({hb['cycles_failed']} failed)")
 
     print("dashboard export: all checks pass")
 

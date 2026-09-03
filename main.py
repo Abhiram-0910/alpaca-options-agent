@@ -127,29 +127,19 @@ async def _manage_loop(interval_minutes: int):
         await asyncio.sleep(interval_minutes * 60)
 
 
-async def _run_loop(interval_minutes: int, max_spend: float, multi_agent: bool = False, provider: str = "openai"):
-    session_spend = 0.0
-    while True:
-        if max_spend > 0 and session_spend >= max_spend:
-            print(f"\nSession spend cap reached (${session_spend:.4f} >= ${max_spend:.2f}). Stopping.")
-            log_event("session_spend_cap_reached", session_spend_usd=round(session_spend, 5), cap_usd=max_spend)
-            alert("session_spend_cap_reached", session_spend_usd=round(session_spend, 5), cap_usd=max_spend)
-            return
-        if market_is_open():
-            try:
-                session_spend += await _run_once(multi_agent, provider)
-                print(f"Session spend so far: ${session_spend:.4f}"
-                      + (f" (cap ${max_spend:.2f})" if max_spend > 0 else ""))
-            except TradingKilled as exc:
-                print(f"{exc} Waiting for the kill switch to clear...")
-            except Exception as exc:
-                log_event("cycle_error", error=str(exc))
-                alert("cycle_error", error=str(exc))
-                print(f"Cycle failed: {exc}")
-        else:
-            print("Market closed — skipping cycle.")
-        print(f"Sleeping {interval_minutes} minutes...\n")
-        await asyncio.sleep(interval_minutes * 60)
+async def _run_loop(interval_minutes: int, max_spend: float, multi_agent: bool = False,
+                     provider: str = "openai", max_cycles: int = None):
+    """Unattended. All the failure handling and wall-clock judgement lives in
+    agent/supervisor.py — see that module's docstring for what this used to be missing."""
+    from functools import partial
+    from agent.supervisor import run_supervised
+    return await run_supervised(
+        partial(_run_once, multi_agent, provider),
+        _manage_open_positions,
+        interval_minutes=interval_minutes,
+        max_spend=max_spend,
+        max_cycles=max_cycles,
+    )
 
 
 if __name__ == "__main__":
@@ -178,6 +168,9 @@ if __name__ == "__main__":
                          help="Build the single bounded demonstration spread (see "
                               "agent/demonstration.py) and run it through the full risk gate "
                               "WITHOUT submitting. Requires DEMONSTRATION_MODE=true.")
+    parser.add_argument("--max-cycles", type=int, default=None,
+                         help="Stop --loop after this many cycles. Unbounded by default; set it "
+                              "to bound a verification run.")
     parser.add_argument("--export-dashboard", action="store_true",
                          help="Just write logs/dashboard.json from the existing logs and exit. "
                               "The file is refreshed after every other mode anyway; this is for "
@@ -215,7 +208,8 @@ if __name__ == "__main__":
             asyncio.run(_run_deterministic_once())
         elif args.loop:
             _require_api_key(args.provider)
-            asyncio.run(_run_loop(args.interval, args.max_spend, args.multi_agent, args.provider))
+            asyncio.run(_run_loop(args.interval, args.max_spend, args.multi_agent,
+                                   args.provider, args.max_cycles))
         else:
             _require_api_key(args.provider)
             asyncio.run(_run_once(args.multi_agent, args.provider))

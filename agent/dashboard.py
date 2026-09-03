@@ -317,6 +317,43 @@ def _trades_section(rows: list, positions: dict) -> list:
     return out
 
 
+# --- heartbeats ------------------------------------------------------------
+
+# Enough to cover a full session at a 15-minute interval without unbounded growth.
+_HEARTBEAT_LIMIT = 120
+
+
+def _heartbeats_section(rows: list) -> dict:
+    """Proof the agent was alive and deciding, not switched off.
+
+    An account that did not trade for six hours and an agent nobody started produce the same
+    empty position list. The difference lives here: `last_seen_at` with `declined` counts is
+    a record of six hours of decisions.
+    """
+    beats = [r for r in rows if r.get("type") == "heartbeat"]
+    recent = beats[-_HEARTBEAT_LIMIT:]
+    return {
+        "last_seen_at": beats[-1].get("ts") if beats else None,
+        "total_cycles": len(beats),
+        "cycles_traded": sum(1 for b in beats if b.get("traded")),
+        "cycles_declined": sum(1 for b in beats if not b.get("traded") and not b.get("error")),
+        "cycles_failed": sum(1 for b in beats if b.get("error")),
+        "recent": [{
+            "ts": b.get("ts"),
+            "cycle": b.get("cycle"),
+            "action": b.get("action"),
+            "market_open": b.get("market_open"),
+            "traded": bool(b.get("traded")),
+            "entries_blocked": b.get("entries_blocked"),
+            "must_be_flat": b.get("must_be_flat"),
+            "cycle_cost_usd": _num(b.get("cycle_cost_usd")),
+            "session_spend_usd": _num(b.get("session_spend_usd")),
+            "consecutive_failures": b.get("consecutive_failures"),
+            "error": b.get("error"),
+        } for b in recent],
+    }
+
+
 # --- meta ------------------------------------------------------------------
 
 def _bootstrap_meta() -> dict:
@@ -387,6 +424,7 @@ def export_dashboard(path: str = None) -> dict:
         "validation": validation,
         "gate_decisions": _gate_decisions(rows),
         "trades": _trades_section(rows, positions),
+        "heartbeats": _heartbeats_section(rows),
     }
 
     os.makedirs(logs, exist_ok=True)
@@ -404,6 +442,10 @@ if __name__ == "__main__":
     print(f"  gate decisions: {len(snap['gate_decisions'])} "
           f"({sum(1 for d in snap['gate_decisions'] if not d['approved'])} rejections)")
     print(f"  trades: {len(snap['trades'])}")
+    hb = snap["heartbeats"]
+    print(f"  heartbeats: {hb['total_cycles']} cycles "
+          f"({hb['cycles_traded']} traded, {hb['cycles_declined']} declined, "
+          f"{hb['cycles_failed']} failed), last seen {hb['last_seen_at']}")
     acct = snap["account"]
     detail = acct["error"] or "equity {}, {} open positions".format(
         acct["equity"], acct["open_position_count"])

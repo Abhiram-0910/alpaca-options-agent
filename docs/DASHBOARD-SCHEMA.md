@@ -55,7 +55,8 @@ Consequences worth knowing before you write a chart:
   "account":        { ... },
   "validation":     [ ... ],
   "gate_decisions": [ ... ],
-  "trades":         [ ... ]
+  "trades":         [ ... ],
+  "heartbeats":     { ... }
 }
 ```
 
@@ -223,6 +224,35 @@ Every order actually placed, newest first. Sourced from `demonstration_order`,
 
 An empty `trades` list is a normal state, not a bug: no strategy has cleared validation, so
 the agent is correctly refusing to open positions.
+
+---
+
+## `heartbeats`
+
+One object. Written by the supervised loop (`agent/supervisor.py`), one record per pass
+**including the passes that do nothing**.
+
+This is the section that separates "the agent evaluated and declined" from "the agent was
+off". An account that did not trade for six hours and an agent nobody started produce the
+same empty position list; only this tells them apart.
+
+| field | type | notes |
+|---|---|---|
+| `last_seen_at` | ISO-8601 UTC \| null | most recent heartbeat. `null` means never seen, not "seen with zero cycles" |
+| `total_cycles` | int | |
+| `cycles_traded` | int | passes that ran a full trading cycle |
+| `cycles_declined` | int | passes that deliberately did nothing — market closed, entries blocked, already flat |
+| `cycles_failed` | int | passes that raised. A failure is its own state, neither a trade nor a decline |
+| `recent[]` | array | the last 120 heartbeats, oldest first |
+
+`recent[]` entries carry `ts`, `cycle`, `action` (prose describing the decision),
+`market_open`, `traded`, `entries_blocked`, `must_be_flat`, `cycle_cost_usd`,
+`session_spend_usd`, `consecutive_failures` and `error`.
+
+`entries_blocked` and `must_be_flat` hold the session-window reason string when those rules
+fired, and `null` otherwise — so a stretch of declines is attributable to a specific rule.
+Three consecutive failures trip the kill switch and stop the loop; the last heartbeat before
+that says so in `action`.
 
 ---
 
