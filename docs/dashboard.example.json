@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "meta": {
-    "generated_at": "2026-09-03T02:21:17.865351+00:00",
+    "generated_at": "2026-09-03T02:55:46.016410+00:00",
     "data_feed": "Alpaca Indicative Pricing Feed, not OPRA",
-    "engine_commit": "a444230",
+    "engine_commit": "ad02618",
     "paper_trading": true,
     "bootstrap": {
       "method": "percentile bootstrap; circular moving-block where trades overlap",
@@ -33,7 +33,9 @@
     "options_buying_power": 100000.0,
     "open_position_count": 0,
     "account_number": "PA314K6MBKHZ",
-    "timestamp": "2026-09-03T02:21:16.558166+00:00",
+    "timestamp": "2026-09-03T02:55:46.009111+00:00",
+    "source": "alpaca-cli",
+    "source_version": "0.0.14",
     "error": null
   },
   "validation": [

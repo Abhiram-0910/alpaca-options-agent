@@ -126,7 +126,16 @@ One object. Live from Alpaca at generation time.
 | `open_position_count` | int \| null | `null` (not `0`) when the fetch failed |
 | `account_number` | string \| null | paper account |
 | `timestamp` | ISO-8601 UTC | when the fetch was attempted, always present |
+| `source` | string \| null | which surface answered: `"alpaca-cli"` or `"alpaca-py"`. `null` when no read was attempted |
+| `source_version` | string \| null | CLI version when `source` is `"alpaca-cli"` |
 | `error` | string \| null | `null` on success; otherwise why every other field is `null` |
+
+The account and positions are read through the **Alpaca CLI** (`alpacahq/cli`) first and
+alpaca-py second; `source` records which one answered, and the two were cross-checked to
+agree field for field. The CLI is the primary surface deliberately, refreshed every cycle by
+the supervised loop. The SDK fallback is what keeps a checkout without the binary — this
+worktree included — rendering a real account rather than an error panel. Order placement
+does **not** go through the CLI; it stays on the MCP server, behind one risk gate.
 
 If `error` is non-null, show it. An account panel silently reading zero is worse than one
 that says the fetch failed.

@@ -77,40 +77,89 @@ def _read_jsonl(path: str) -> list:
 
 # --- account ---------------------------------------------------------------
 
+def _blank_account() -> dict:
+    return {"equity": None, "last_equity": None, "buying_power": None,
+            "options_buying_power": None, "open_position_count": None,
+            "account_number": None, "timestamp": _utcnow(), "source": None,
+            "source_version": None, "error": None}
+
+
+def _position_row(symbol, qty, current_price, market_value, unrealized_pl) -> dict:
+    return {"symbol": symbol, "qty": _num(qty), "current_price": _num(current_price),
+            "market_value": _num(market_value), "unrealized_pl": _num(unrealized_pl)}
+
+
+def _account_via_cli():
+    """Read account and positions through the Alpaca CLI. None when it cannot."""
+    from agent import alpaca_cli
+    acct = alpaca_cli.get_account()
+    positions = alpaca_cli.get_positions()
+    if acct is None or positions is None:
+        return None
+    section = _blank_account()
+    section["source"] = "alpaca-cli"
+    section["source_version"] = alpaca_cli.version() or None
+    section["equity"] = _num(acct.get("equity"))
+    section["last_equity"] = _num(acct.get("last_equity"))
+    section["buying_power"] = _num(acct.get("buying_power"))
+    section["options_buying_power"] = _num(acct.get("options_buying_power"))
+    section["account_number"] = acct.get("account_number")
+    rows = {p["symbol"]: _position_row(p["symbol"], p.get("qty"), p.get("current_price"),
+                                        p.get("market_value"), p.get("unrealized_pl"))
+            for p in positions if isinstance(p, dict) and p.get("symbol")}
+    section["open_position_count"] = len(rows)
+    return section, rows
+
+
+def _account_via_sdk():
+    """Read the same state through alpaca-py. Raises; the caller reports the error."""
+    from alpaca.trading.client import TradingClient
+    client = TradingClient(CONFIG.alpaca_api_key, CONFIG.alpaca_secret_key,
+                           paper=CONFIG.alpaca_paper)
+    acct = client.get_account()
+    section = _blank_account()
+    section["source"] = "alpaca-py"
+    section["equity"] = _num(acct.equity)
+    section["last_equity"] = _num(acct.last_equity)
+    section["buying_power"] = _num(acct.buying_power)
+    section["options_buying_power"] = _num(getattr(acct, "options_buying_power", None))
+    section["account_number"] = getattr(acct, "account_number", None)
+    rows = {p.symbol: _position_row(p.symbol, p.qty, p.current_price, p.market_value,
+                                     p.unrealized_pl)
+            for p in client.get_all_positions()}
+    section["open_position_count"] = len(rows)
+    return section, rows
+
+
 def _account_section() -> dict:
     """Live account state plus open positions, keyed by option symbol for trade marks.
 
+    Read through the Alpaca CLI first and alpaca-py second, with `source` recording which
+    one answered. The CLI is the primary surface deliberately -- it is a first-class Alpaca
+    product and this is a real dependency on it, refreshed every cycle, not a demonstration.
+    The SDK fallback is what keeps a checkout without the binary (the dashboard worktree, a
+    fresh clone) rendering a real account rather than an error panel.
+
     Returns the section and the position map separately because `trades` needs the map.
     """
-    section = {"equity": None, "last_equity": None, "buying_power": None,
-               "options_buying_power": None, "open_position_count": None,
-               "account_number": None, "timestamp": _utcnow(), "error": None}
-    positions = {}
     if not CONFIG.alpaca_api_key or not CONFIG.alpaca_secret_key:
+        section = _blank_account()
         section["error"] = "no Alpaca credentials in environment"
-        return section, positions
+        return section, {}
     try:
-        from alpaca.trading.client import TradingClient
-        client = TradingClient(CONFIG.alpaca_api_key, CONFIG.alpaca_secret_key,
-                               paper=CONFIG.alpaca_paper)
-        acct = client.get_account()
-        section["equity"] = _num(acct.equity)
-        section["last_equity"] = _num(acct.last_equity)
-        section["buying_power"] = _num(acct.buying_power)
-        section["options_buying_power"] = _num(getattr(acct, "options_buying_power", None))
-        section["account_number"] = getattr(acct, "account_number", None)
-        for p in client.get_all_positions():
-            positions[p.symbol] = {
-                "symbol": p.symbol,
-                "qty": _num(p.qty),
-                "current_price": _num(p.current_price),
-                "market_value": _num(p.market_value),
-                "unrealized_pl": _num(p.unrealized_pl),
-            }
-        section["open_position_count"] = len(positions)
+        via_cli = _account_via_cli()
+        if via_cli is not None:
+            return via_cli
+    except Exception:
+        # Any CLI problem at all is a fallback, never a failure: the SDK below is the
+        # authority on whether the account is actually reachable.
+        pass
+    try:
+        return _account_via_sdk()
     except Exception as exc:
+        section = _blank_account()
         section["error"] = f"{type(exc).__name__}: {exc}"
-    return section, positions
+        return section, {}
 
 
 def _num(value):

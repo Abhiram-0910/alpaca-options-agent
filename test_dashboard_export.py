@@ -47,6 +47,8 @@ def demo() -> None:
         # No credentials must degrade to nulls with a stated reason, never to a fake balance.
         assert snap["account"]["equity"] is None, snap["account"]
         assert snap["account"]["error"], "a null account must say why it is null"
+        # No read happened at all, so no surface can be claimed for one.
+        assert snap["account"]["source"] is None, snap["account"]
         print("empty logs/ -> valid JSON, all sections present, account nulled with a reason")
 
     with tempfile.TemporaryDirectory() as tmp:
