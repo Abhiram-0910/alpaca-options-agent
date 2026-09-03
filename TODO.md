@@ -18,11 +18,14 @@ Read at session start. Updated at session end.
 - [ ] Tell Antigravity: export `schema_version` is now **2** — `reproducibility` renamed to
       `determinism`, `counterfactual` added.
 - [ ] Run `python main.py --preflight` at 18:50 IST. Currently 11 green / 1 warn / 0 red.
-- [ ] **`FEATHERLESS_API_KEY` STILL NOT SET** — no such line in `.env`. Until it is, no
+- [x] Featherless arbiter live — first three-model cycle run; default model was gated,
+      switched to `Qwen/Qwen2.5-7B-Instruct` (3 Sep)
+- [ ] Antigravity: merge main again for the arbiter model-default fix — their copy still has
+      the gated `meta-llama/Llama-3.1-8B-Instruct`, which 403s on this plan.
+- [ ] ~~`FEATHERLESS_API_KEY` STILL NOT SET~~ — no such line in `.env`. Until it is, no
       three-model cycle can run and the council is two models. Endpoint verified reachable;
       only the credential is missing.
-- [ ] **Set `FEATHERLESS_API_KEY`** or drop the third-seat claim from the submission. The
-      arbiter is wired and fails closed, but the council is two models until the key exists.
+- [x] `FEATHERLESS_API_KEY` set and verified; the council is genuinely three models (3 Sep)
 - [ ] Antigravity: 3 of 16 arbiter tests need updating — two assert a removed injection
       vulnerability, one asserts the crashing `log_event` call shape.
 - [x] Arbiter wired as advisory third seat; 5 council attacks added, 18/18 blocked (3 Sep)
