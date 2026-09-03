@@ -43,12 +43,18 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
   `estimated_capital_at_risk` is therefore null on nearly every gate decision, and the
   figure is deliberately **not** regex'd back out of the rejection's prose.
 
-**Known gap, not fixed here**
-- `RiskGate._reject()` returns `{approved, reason}` only, and the `tool_call` log site does
-  not record the capital figure on an approval either. Until both are changed,
-  `gate_decisions[].estimated_capital_at_risk` stays sparse. Roughly a three-line fix across
-  `agent/risk/gates.py` and the two LLM tool-call log sites; left out because it changes the
-  order path, which was out of scope for this task.
+**Then fixed, same session, before the demonstration order fires**
+- `RiskGate._reject()` now carries the capital figure and basis, passed at all four cap
+  sites. Both LLM `tool_call` log sites record them on approvals and rejections alike.
+- The demonstration path logged **nothing** when the gate approved: `demonstration_rejected`
+  on refusal, otherwise only `demonstration_order`, which a dry run returns before reaching.
+  Dry run is the default, so the approval of the only trade this agent places was recorded
+  nowhere at all. Added `demonstration_approved`.
+- The figure is structured end to end and is never parsed back out of the `reason` prose,
+  which carries a rounded copy. Rejections thrown before capital is computed stay null, and
+  null keeps meaning "never computed", not "risked nothing".
+- Verified against the real gate: naked short put refused at **$75,500**, the defined-risk
+  spread that replaces it approved at **$423**, dry-run `--demonstrate` approval row at $419.
 
 ### 2 Sep 2026 — make the LLM paths runnable, pin the demonstration expiry — *Claude Code*
 

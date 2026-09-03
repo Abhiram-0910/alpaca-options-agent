@@ -44,11 +44,11 @@ Read at session start. Updated at session end.
 - [x] Dashboard export contract — `agent/dashboard.py` writes `logs/dashboard.json`,
       shape documented in `docs/DASHBOARD-SCHEMA.md`, sample at `docs/dashboard.example.json`
       because `logs/` is gitignored. Antigravity builds against that (2 Sep)
-- [ ] Record `estimated_capital_at_risk` on gate decisions. `RiskGate._reject()` returns
-      `{approved, reason}` only, and the `tool_call` log sites don't log the figure on an
-      approval either, so `gate_decisions[].estimated_capital_at_risk` is null almost
-      everywhere in the dashboard export. ~3 lines across `agent/risk/gates.py`,
-      `agent/live_agent.py` and `agent/live_agent_openai.py`.
+- [x] `estimated_capital_at_risk` logged on gate rejections and approvals — `_reject()`
+      carries the figure and basis at all four cap sites, both LLM tool_call log sites record
+      them, and the demonstration path now logs `demonstration_approved` (it previously
+      logged nothing when the gate approved, and dry run is the default). Verified $75,500
+      refused vs $423 approved (2 Sep)
 - [ ] Label indicative-feed data as such everywhere it surfaces to a user or a judge.
       Partly done: `meta.data_feed` in the dashboard export already names it.
 - [ ] Add the conservative mark-to-market alongside Alpaca's simulated P&L.
