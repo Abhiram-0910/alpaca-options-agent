@@ -89,13 +89,29 @@ def demo() -> None:
     # 6. The council attacks. The property is that no combination of model outputs widens
     #    what the gate permits -- so these run the real gate with every model verdict forced
     #    to the most permissive value it could take.
+    import asyncio
     from agent.adversarial import _council_attacks
-    council = _council_attacks()
+    council = asyncio.run(_council_attacks())
     assert len(council) == 5, [c["id"] for c in council]
     for c in council:
         assert c["approved"] is False, f"council attack got through: {c}"
         assert c["layer"] == "council", c
-    print(f"{len(council)} council attacks, all blocked")
+    # Whether the real arbiter answered is recorded, never assumed. Without a Featherless
+    # key these still pass -- but they would pass for the wrong reason, so the mode is
+    # reported rather than hidden. An arbiter that cannot be invoked blocks by definition.
+    live = [c for c in council if (c.get("arbiter") or {}).get("arbiter_live")]
+    models = {(c.get("arbiter") or {}).get("model") for c in live}
+    print(f"{len(council)} council attacks, all blocked "
+          f"({len(live)} against a LIVE arbiter"
+          + (f": {', '.join(sorted(m for m in models if m))}" if models else "")
+          + ")")
+    if live:
+        # The point of the advisory design, asserted where the arbiter actually answered:
+        # its ruling does not change the gate's verdict either way.
+        c01 = next(c for c in council if c["id"].startswith("C01"))
+        assert c01["approved"] is False, c01
+        print(f"      C01: live arbiter ruled "
+              f"{(c01.get('arbiter') or {}).get('ruling')!r}; gate refused regardless")
 
     # 7. The arbiter fails closed on every response it cannot structurally parse. The
     #    keyword fallback that shipped ruled "proceed" on any text containing that word, and

@@ -40,7 +40,13 @@ from agent.trade_log import log_event
 # ── model ──────────────────────────────────────────────────────────────────────
 # Default to a compact but capable instruction model available on Featherless free tier.
 # Override via FEATHERLESS_MODEL env var.
-DEFAULT_ARBITER_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
+# meta-llama/* is GATED on Featherless: every model under that org returns HTTP 403
+# `model_gated_needs_oauth` until the account links HuggingFace, so the previous default
+# could not be served at all on this plan and the seat 403'd on first contact. Verified
+# against the live listing: 0 of the meta-llama models are ungated-and-available here.
+# Qwen2.5-7B-Instruct is ungated, on the current plan, and returns strict JSON on the
+# arbiter prompt in ~2s. Override with FEATHERLESS_MODEL.
+DEFAULT_ARBITER_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 ARBITER_BASE_URL = "https://api.featherless.ai/v1"
 
 # Context budget: keep the arbiter prompt small — it has no tools and sees only the
