@@ -35,13 +35,19 @@ def demo() -> None:
             reloaded = json.load(f)
         assert reloaded == json.loads(json.dumps(snap, default=str)), "file and return value disagree"
         for key in ("schema_version", "meta", "account", "validation", "gate_decisions",
-                     "trades", "heartbeats"):
+                     "trades", "heartbeats", "adversarial", "fill_analysis"):
             assert key in snap, f"empty export is missing top-level key {key!r}"
         assert snap["validation"] == [], snap["validation"]
         assert snap["gate_decisions"] == [] and snap["trades"] == []
         # No heartbeats yet must read as "never seen", not as a zero-cycle success.
         assert snap["heartbeats"]["last_seen_at"] is None, snap["heartbeats"]
         assert snap["heartbeats"]["total_cycles"] == 0
+        # Never run is not the same as run and clean.
+        assert snap["adversarial"]["attacks_run"] is None, snap["adversarial"]
+        assert snap["adversarial"]["results"] == []
+        # No fills yet must read as not-yet-measurable, never as "no difference".
+        assert snap["fill_analysis"]["mean_delta"] is None, snap["fill_analysis"]
+        assert snap["fill_analysis"]["legs_filled"] == 0
         assert snap["meta"]["distinct_pairs_evaluated"] == 0
         assert snap["meta"]["total_validation_records"] == 0
         # No credentials must degrade to nulls with a stated reason, never to a fake balance.
@@ -108,6 +114,15 @@ def demo() -> None:
                                 "market_open": True, "traded": False,
                                 "consecutive_failures": 1,
                                 "error": "TimeoutError: MCP call timed out"}) + "\n")
+            f.write(json.dumps({"ts": "2026-09-02T09:50:00+00:00", "type": "fill_analysis",
+                                "order_id": "abc", "context": "demonstration",
+                                "order_status": "filled", "legs_filled": 1, "legs": [
+                                    {"symbol": "SPY260904P00751000", "indicative_mid": 0.45,
+                                     "filled_price": 0.52, "delta": 0.07,
+                                     "delta_sign": "above_mid"},
+                                    {"symbol": "SPY260904P00756000", "indicative_mid": 1.15,
+                                     "filled_price": None, "delta": None,
+                                     "delta_sign": None}]}) + "\n")
             f.write("{ this line is truncated\n")
 
         snap = _export_with_logs_dir(tmp)
@@ -161,6 +176,11 @@ def demo() -> None:
         # A failed cycle is neither a trade nor a decline -- it is its own state.
         assert hb["cycles_failed"] == 1 and hb["cycles_traded"] == 0, hb
         assert hb["last_seen_at"] == "2026-09-02T09:45:00+00:00", hb
+
+        fa = snap["fill_analysis"]
+        # The mean is over filled legs only; an unfilled leg must not be averaged in as zero.
+        assert fa["legs_measured"] == 2 and fa["legs_filled"] == 1, fa
+        assert fa["mean_delta"] == 0.07 and fa["legs_above_mid"] == 1, fa
 
         print("populated logs/ -> 1 distinct pair vs 4 records, passed-primary-gate 1 but "
               "cleared 0, rejections first, capital column $75,500 refused vs $423 approved, "

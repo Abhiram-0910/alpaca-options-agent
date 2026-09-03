@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "meta": {
-    "generated_at": "2026-09-03T06:09:23.826333+00:00",
+    "generated_at": "2026-09-03T06:29:39.033761+00:00",
     "data_feed": "Alpaca Indicative Pricing Feed, not OPRA",
-    "engine_commit": "74a1aa7",
+    "engine_commit": "1520373",
     "paper_trading": true,
     "bootstrap": {
       "method": "percentile bootstrap; circular moving-block where trades overlap",
@@ -33,7 +33,7 @@
     "options_buying_power": 100000.0,
     "open_position_count": 0,
     "account_number": "PA314K6MBKHZ",
-    "timestamp": "2026-09-03T06:09:23.821250+00:00",
+    "timestamp": "2026-09-03T06:29:39.028405+00:00",
     "source": "alpaca-cli",
     "source_version": "0.0.14",
     "error": null
@@ -617,6 +617,39 @@
       "capital_basis": null,
       "validation_status": "UNVALIDATED_DEMONSTRATION",
       "symbol": "SPY260904P00750000"
+    },
+    {
+      "ts": "2026-09-03T06:12:28.257052+00:00",
+      "approved": true,
+      "tool": "place_option_order",
+      "agent": "demonstration",
+      "reason": null,
+      "estimated_capital_at_risk": 431.0,
+      "capital_basis": "(5.00 width - 0.69 credit) x 100 x 1",
+      "validation_status": "UNVALIDATED_DEMONSTRATION",
+      "symbol": "SPY260904P00756000"
+    },
+    {
+      "ts": "2026-09-03T06:11:38.066037+00:00",
+      "approved": true,
+      "tool": "place_option_order",
+      "agent": "demonstration",
+      "reason": null,
+      "estimated_capital_at_risk": 431.0,
+      "capital_basis": "(5.00 width - 0.69 credit) x 100 x 1",
+      "validation_status": "UNVALIDATED_DEMONSTRATION",
+      "symbol": "SPY260904P00756000"
+    },
+    {
+      "ts": "2026-09-03T06:11:30.672453+00:00",
+      "approved": true,
+      "tool": "place_option_order",
+      "agent": "demonstration",
+      "reason": null,
+      "estimated_capital_at_risk": 431.0,
+      "capital_basis": "(5.00 width - 0.69 credit) x 100 x 1",
+      "validation_status": "UNVALIDATED_DEMONSTRATION",
+      "symbol": "SPY260904P00756000"
     },
     {
       "ts": "2026-09-03T05:58:16.629331+00:00",
@@ -1296,5 +1329,17 @@
         "injection_bounded": true
       }
     ]
+  },
+  "fill_analysis": {
+    "orders_measured": 0,
+    "legs_measured": 0,
+    "legs_filled": 0,
+    "mean_delta": null,
+    "legs_above_mid": 0,
+    "legs_below_mid": 0,
+    "legs_at_mid": 0,
+    "delta_sign_convention": "positive = fill printed above the indicative mid we could see",
+    "feed": "Alpaca Indicative Pricing Feed, not OPRA",
+    "orders": []
   }
 }

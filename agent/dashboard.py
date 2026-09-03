@@ -430,6 +430,41 @@ def _adversarial_section(logs: str) -> dict:
     }
 
 
+# --- fill analysis ---------------------------------------------------------
+
+def _fill_analysis_section(rows: list) -> dict:
+    """Indicative quote vs simulated fill, per leg, for every order submitted.
+
+    Answers whether Alpaca's paper fill engine prices against fresher data than the free
+    Indicative Pricing Feed lets us see. `mean_delta` is over filled legs only; with no fills
+    yet it is null, and null here means "not yet measurable", never "no difference".
+    """
+    entries = [r for r in rows if r.get("type") == "fill_analysis"]
+    legs = [l for e in entries for l in (e.get("legs") or [])]
+    filled = [l for l in legs if l.get("delta") is not None]
+    deltas = [l["delta"] for l in filled]
+    return {
+        "orders_measured": len(entries),
+        "legs_measured": len(legs),
+        "legs_filled": len(filled),
+        "mean_delta": round(sum(deltas) / len(deltas), 4) if deltas else None,
+        "legs_above_mid": sum(1 for l in filled if l["delta_sign"] == "above_mid"),
+        "legs_below_mid": sum(1 for l in filled if l["delta_sign"] == "below_mid"),
+        "legs_at_mid": sum(1 for l in filled if l["delta_sign"] == "at_mid"),
+        "delta_sign_convention": "positive = fill printed above the indicative mid we could see",
+        "feed": DATA_FEED,
+        "orders": [{
+            "ts": e.get("ts"),
+            "order_id": e.get("order_id"),
+            "context": e.get("context"),
+            "order_status": e.get("order_status"),
+            "legs_filled": e.get("legs_filled"),
+            "error": e.get("error"),
+            "legs": e.get("legs") or [],
+        } for e in entries],
+    }
+
+
 # --- meta ------------------------------------------------------------------
 
 def _bootstrap_meta() -> dict:
@@ -502,6 +537,7 @@ def export_dashboard(path: str = None) -> dict:
         "trades": _trades_section(rows, positions),
         "heartbeats": _heartbeats_section(rows),
         "adversarial": _adversarial_section(logs),
+        "fill_analysis": _fill_analysis_section(rows),
     }
 
     os.makedirs(logs, exist_ok=True)
@@ -519,6 +555,9 @@ if __name__ == "__main__":
     print(f"  gate decisions: {len(snap['gate_decisions'])} "
           f"({sum(1 for d in snap['gate_decisions'] if not d['approved'])} rejections)")
     print(f"  trades: {len(snap['trades'])}")
+    fa = snap["fill_analysis"]
+    print(f"  fill analysis: {fa['orders_measured']} orders, {fa['legs_filled']}/"
+          f"{fa['legs_measured']} legs filled, mean delta {fa['mean_delta']}")
     adv = snap["adversarial"]
     print(f"  adversarial: {adv['attacks_run']} attacks, {adv['blocked']} blocked, "
           f"{adv['got_through']} got through, {adv['orders_submitted']} orders submitted")

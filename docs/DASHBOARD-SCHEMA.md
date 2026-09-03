@@ -57,7 +57,8 @@ Consequences worth knowing before you write a chart:
   "gate_decisions": [ ... ],
   "trades":         [ ... ],
   "heartbeats":     { ... },
-  "adversarial":    { ... }
+  "adversarial":    { ... },
+  "fill_analysis":  { ... }
 }
 ```
 
@@ -300,6 +301,37 @@ Two real holes were found this way and fixed — a `ratio_qty` mismatch priced a
 vertical, leaving a naked short charged nothing, and an unlisted contract was approved. The
 second is only closed when a caller supplies the chain it fetched (the gate does no network
 I/O); `results[].without_chain` records what happens when nobody does.
+
+---
+
+## `fill_analysis`
+
+Indicative quote versus simulated fill, per leg, for every order submitted. This exists to
+answer an open question: does Alpaca's paper fill engine price against fresher data than the
+free Indicative Pricing Feed lets us see? If it does, every expected-credit figure in this
+project is systematically off in a direction we can measure.
+
+| field | type | notes |
+|---|---|---|
+| `orders_measured` / `legs_measured` / `legs_filled` | int | |
+| `mean_delta` | float \| null | over **filled legs only**. `null` means not yet measurable, never "no difference" |
+| `legs_above_mid` / `legs_below_mid` / `legs_at_mid` | int | |
+| `delta_sign_convention` | string | positive = the fill printed **above** the indicative mid we could see |
+| `feed` | string | the feed the indicative side came from |
+| `orders[]` | array | per-order records, each with `legs[]` |
+
+Each leg carries `indicative_bid` / `indicative_ask` / `indicative_mid`, `quote_captured_at`,
+`on_chain`, `filled_price`, `filled_qty`, `filled_at`, `status`, `delta`, `delta_sign` and
+`capture_lag_seconds`.
+
+The pre-trade quote is read from the chain snapshot the caller already fetched to build the
+order — no extra round trip, nothing new between the decision and the submission. The cost is
+a gap between when that chain was read and when the order went in, and `capture_lag_seconds`
+records it rather than hiding it. Everything on the fill side happens after submission, where
+latency is free.
+
+An unfilled or canceled leg yields `filled_price: null` and `delta: null`. No zero is ever
+fabricated, and an unfilled leg is not averaged into `mean_delta` as though it filled at mid.
 
 ---
 

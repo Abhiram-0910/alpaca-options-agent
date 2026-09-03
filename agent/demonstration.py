@@ -309,6 +309,15 @@ async def run_cycle(dry_run: bool = True) -> dict:
                   capital_basis=decision.get("capital_basis"), dry_run=dry_run,
                   validation_status=DEMONSTRATION_STATUS)
 
+        # Pre-trade indicative quotes, read from the chain already fetched above. No extra
+        # round trip and nothing new between the decision and the submission -- the cost is a
+        # timing gap, which fill_analysis measures rather than hides. Captured before the dry
+        # run returns so the dry path records what it would have compared against.
+        from agent import fill_analysis
+        quote_snapshot = fill_analysis.capture_quotes(
+            chain, [l["symbol"] for l in payload["legs"]])
+        result["pre_trade_quotes"] = quote_snapshot
+
         if dry_run:
             result["skipped"].append("dry run — payload built and approved, not submitted")
             return result
@@ -327,4 +336,19 @@ async def run_cycle(dry_run: bool = True) -> dict:
               capital_at_risk=decision.get("estimated_capital_at_risk"),
               validation_status=DEMONSTRATION_STATUS)
         result["submitted"] = True
+
+        # Everything below is measurement, after the order is already in. It cannot delay the
+        # submission and cannot fail it: record() swallows its own errors, and the order is
+        # reported as submitted regardless of whether the comparison worked.
+        order_id = None
+        try:
+            order_id = (json.loads(raw).get("data") or {}).get("id")
+        except (ValueError, AttributeError):
+            order_id = None
+        if order_id:
+            result["fill_analysis"] = fill_analysis.record(
+                order_id, quote_snapshot, context="demonstration")
+        else:
+            log_event("fill_analysis_skipped", reason="no order id in the submit response",
+                      result=raw[:500])
         return result
