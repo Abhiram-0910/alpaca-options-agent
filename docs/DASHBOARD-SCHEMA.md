@@ -59,10 +59,16 @@ Consequences worth knowing before you write a chart:
   "heartbeats":     { ... },
   "adversarial":    { ... },
   "fill_analysis":  { ... },
-  "reproducibility":{ ... },
-  "arbiter":        { ... }
+  "determinism":    { ... },
+  "arbiter":        { ... },
+  "counterfactual": { ... }
 }
 ```
+
+> **schema_version 2 — breaking.** The `reproducibility` section is now `determinism`,
+> carrying per-replay detail, a divergence rate with a Wilson 95% interval, and a count of
+> divergences that changed which tool was called. A reader keyed on `reproducibility` must
+> be updated. `counterfactual` is new and additive.
 
 `schema_version` is an integer. It increments on any breaking change to the shapes below.
 
@@ -337,9 +343,9 @@ fabricated, and an unfilled leg is not averaged into `mean_delta` as though it f
 
 ---
 
-## `reproducibility`
+## `determinism`
 
-What replaying past decisions actually showed. Written from `logs/llm_calls.jsonl` (every
+What replaying past decisions actually showed. **Was `reproducibility` in schema_version 1.** Written from `logs/llm_calls.jsonl` (every
 LLM call recorded whole) and `logs/replay_report.json` (`python main.py --replay all`).
 
 | field | type | notes |
@@ -347,6 +353,13 @@ LLM call recorded whole) and `logs/replay_report.json` (`python main.py --replay
 | `calls_recorded` / `distinct_decisions` | int | |
 | `tier` | string | the reproducibility tier actually reached |
 | `replays` / `exact` / `equivalent` / `divergent` | int \| null | `null` until a replay has been run |
+| `divergence_rate` | float \| null | fraction of replays that diverged |
+| `divergence_rate_ci95` | object | `{lower, upper, method}` — Wilson score, which stays inside [0,1] where the normal approximation does not |
+| `divergent_tool_changed` | int \| null | divergences that changed **which tool was called** — an action change |
+| `divergent_args_only` | int \| null | divergences that kept the same tools and changed only arguments |
+| `distinct_decisions_replayed` / `repeats_per_decision` | int \| null | repeated trials on one fixed input are the direct test of the claim |
+| `failed_to_replay` | int \| null | replays that could not be issued (e.g. a 429). Excluded from every count above |
+| `headline` | string \| null | one sentence checkable against `results[]` |
 | `across_fingerprint_change` | int \| null | replays where OpenAI's `system_fingerprint` moved between record and replay |
 | `conditions` | string \| null | the settings the replay ran under |
 | `results[]` | array | per-decision outcomes |
@@ -398,6 +411,35 @@ happened; an order exists only where `gate_decisions` shows an approval.
 
 Every failure mode fails closed. `abandon`, `deadlock`, an unparseable or empty response, a
 timeout, or an absent `FEATHERLESS_API_KEY` all leave the Critic's veto standing.
+
+---
+
+## `counterfactual`
+
+What the refused strategies would have returned, priced with the same simulator that refused
+them. Written by `python main.py --counterfactual`.
+
+| field | type | notes |
+|---|---|---|
+| `ran_at` | ISO-8601 UTC \| null | |
+| `window` | object \| null | `entry_date`, `mark_date`, `trading_days_held`, `underlying_move_pct` per symbol |
+| `pairs_evaluated` / `pairs_refused` | int \| null | |
+| `refused_profitable` / `refused_unprofitable` | int \| null | |
+| `total_pnl_dollars_if_all_taken` | float \| null | every refused trade taken at once |
+| `mean_pnl_dollars` / `best` / `worst` | | |
+| `engine` / `marks` | string | which code produced it and on what price path |
+| `interpretation` | string | what the number does and does not establish |
+| `caveats[]` | array | read these before quoting the number |
+| `results[]` | array | per-pair `pnl_dollars`, `net_return_pct`, `exit_reason`, `closed_early`, `refusal_reasons` |
+
+`underlying_move_pct` is there because a short-window result is largely a function of that
+window's direction, and the P&L should never be read without it. `closed_early` is true
+wherever the window was shorter than the strategy's natural hold, which makes these
+**marks, not realised results**.
+
+This prices the gate's decision; it does not judge it. The gate refuses on the width of the
+bootstrap interval, never on the sign of the most recent observation — so a short window
+cannot confirm or overturn a refusal in either direction.
 
 ---
 

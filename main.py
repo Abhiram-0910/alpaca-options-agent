@@ -169,6 +169,13 @@ if __name__ == "__main__":
                          help="Build the single bounded demonstration spread (see "
                               "agent/demonstration.py) and run it through the full risk gate "
                               "WITHOUT submitting. Requires DEMONSTRATION_MODE=true.")
+    parser.add_argument("--preflight", action="store_true",
+                         help="Check everything the session needs — credentials, MCP spawn, "
+                              "CLI auth, clock, chain, gate armed, kill switch, dashboard, "
+                              "expiry, disk. Green/red per line; exits non-zero on any red.")
+    parser.add_argument("--counterfactual", action="store_true",
+                         help="Price what the refused strategies would have returned, using "
+                              "the same simulator that refused them.")
     parser.add_argument("--replay", metavar="DECISION_ID",
                          help="Re-run a past LLM decision from its logged inputs and report "
                               "whether it reproduces (agent/replay.py). Pass 'list' to see "
@@ -201,6 +208,23 @@ if __name__ == "__main__":
 
     from agent.dashboard import export_dashboard
 
+    if args.preflight:
+        from agent.preflight import run_preflight, print_report
+        rep = asyncio.run(run_preflight())
+        print_report(rep)
+        raise SystemExit(0 if rep["ready"] else 1)
+
+    if args.counterfactual:
+        from agent.counterfactual import run_counterfactual
+        r = run_counterfactual()
+        w = r["window"]
+        print(f"Counterfactual {w['entry_date']} -> {w['mark_date']} "
+              f"({w['trading_days_held']} trading day(s))")
+        print(f"{r['pairs_refused']} refused pairs: {r['refused_profitable']} profitable, "
+              f"{r['refused_unprofitable']} not; total "
+              f"${r['total_pnl_dollars_if_all_taken']:,.2f}")
+        raise SystemExit(0)
+
     if args.replay:
         from agent.replay import replay, summary
         if args.replay == "list":
@@ -214,11 +238,16 @@ if __name__ == "__main__":
             raise SystemExit(0)
         if args.replay == "all":
             from agent.replay import replay_many
-            rep = asyncio.run(replay_many(limit=8))
+            rep = asyncio.run(replay_many(limit=40, repeats=1))
             print(f"{rep['replays']} replays under {rep['conditions']}:")
+            ci = rep["divergence_rate_ci95"]
             print(f"  exact {rep['exact']}, equivalent {rep['equivalent']}, "
                   f"divergent {rep['divergent']} "
                   f"({rep['across_fingerprint_change']} across a fingerprint change)")
+            print(f"  divergence rate {rep['divergence_rate']:.1%} "
+                  f"(95% CI {ci['lower']:.1%}-{ci['upper']:.1%}, {ci['method']})")
+            print(f"  of the divergences, {rep['divergent_tool_changed']} changed which tool "
+                  f"was called and {rep['divergent_args_only']} changed only the arguments")
             for r in rep["results"]:
                 print(f"  {r['decision_id']}  {r.get('status')}")
             print("Written to logs/replay_report.json")

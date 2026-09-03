@@ -27,7 +27,9 @@ from agent.config import CONFIG
 # Free-tier options data is NOT OPRA. Named here so the dashboard cannot imply otherwise.
 DATA_FEED = "Alpaca Indicative Pricing Feed, not OPRA"
 
-SCHEMA_VERSION = 1
+# 2: `reproducibility` renamed to `determinism` and enriched with per-replay detail,
+# and a `counterfactual` section added. The rename is the breaking part.
+SCHEMA_VERSION = 2
 
 _ORDER_EVENTS = ("demonstration_order", "multi_agent_order", "deterministic_order")
 
@@ -467,7 +469,7 @@ def _fill_analysis_section(rows: list) -> dict:
 
 # --- reproducibility -------------------------------------------------------
 
-def _reproducibility_section(logs: str) -> dict:
+def _determinism_section(logs: str) -> dict:
     """What replaying past decisions actually showed.
 
     Of the 77 agentic-trading studies audited in the 2026 literature, none reached the top
@@ -482,7 +484,13 @@ def _reproducibility_section(logs: str) -> dict:
         "distinct_decisions": info["distinct_decisions"],
         "tier": info["reproducibility"],
         "replays": None, "exact": None, "equivalent": None, "divergent": None,
+        "divergence_rate": None,
+        "divergence_rate_ci95": {"lower": None, "upper": None, "method": "Wilson score"},
+        "divergent_tool_changed": None, "divergent_args_only": None,
+        "distinct_decisions_replayed": None, "repeats_per_decision": None,
+        "failed_to_replay": None,
         "across_fingerprint_change": None, "conditions": None, "replayed_at": None,
+        "headline": None,
         "results": [],
     }
     if isinstance(report, dict):
@@ -491,12 +499,21 @@ def _reproducibility_section(logs: str) -> dict:
             "exact": report.get("exact"),
             "equivalent": report.get("equivalent"),
             "divergent": report.get("divergent"),
+            "divergence_rate": report.get("divergence_rate"),
+            "divergence_rate_ci95": report.get("divergence_rate_ci95")
+                or {"lower": None, "upper": None, "method": "Wilson score"},
+            "divergent_tool_changed": report.get("divergent_tool_changed"),
+            "divergent_args_only": report.get("divergent_args_only"),
+            "distinct_decisions_replayed": report.get("distinct_decisions_replayed"),
+            "repeats_per_decision": report.get("repeats_per_decision"),
+            "failed_to_replay": report.get("failed_to_replay"),
             "across_fingerprint_change": report.get("across_fingerprint_change"),
             "conditions": report.get("conditions"),
             "replayed_at": report.get("generated_at"),
-            "results": [{k: v for k, v in r.items()
-                          if k not in ("recorded_text", "replayed_text")}
-                         for r in (report.get("results") or [])],
+            "headline": _determinism_headline(report),
+            # Per-replay detail, prose included: a reader checking this claim needs to see
+            # what actually differed, not a count.
+            "results": report.get("results") or [],
         })
     return section
 
@@ -536,6 +553,58 @@ def _arbiter_section(rows: list) -> dict:
             "error": r.get("error"),
         } for r in rulings[-25:]],
         "unavailable_reasons": [r.get("reason") or r.get("error") for r in unavailable[-10:]],
+    }
+
+
+def _determinism_headline(report: dict) -> str:
+    """One sentence a reader can check against results[]."""
+    n = report.get("replays") or 0
+    if not n:
+        return None
+    parts = [f"{n} replays at temperature 0, fixed seed, same model: "
+             f"{report.get('exact')} exact, {report.get('equivalent')} equivalent, "
+             f"{report.get('divergent')} divergent"]
+    rate = report.get("divergence_rate")
+    ci = report.get("divergence_rate_ci95") or {}
+    # A report written before these fields existed still summarises; it just says less.
+    if rate is not None and ci.get("lower") is not None:
+        parts.append(f" ({rate:.0%}, 95% CI {ci['lower']:.0%}-{ci['upper']:.0%})")
+    parts.append(".")
+    changed = report.get("divergent_tool_changed")
+    if changed is not None:
+        parts.append(f" {changed} of the divergences changed which tool was called, not just "
+                     f"its arguments.")
+    fp = report.get("across_fingerprint_change")
+    if fp is not None:
+        parts.append(f" {fp} crossed a system_fingerprint change.")
+    return "".join(parts)
+
+
+# --- counterfactual --------------------------------------------------------
+
+def _counterfactual_section(logs: str) -> dict:
+    """What the refused strategies would have returned. Copied through, never re-derived."""
+    report = _read_json(os.path.join(logs, "counterfactual.json"))
+    if not isinstance(report, dict) or not isinstance(report.get("results"), list):
+        return {"ran_at": None, "window": None, "pairs_refused": None,
+                "refused_profitable": None, "total_pnl_dollars_if_all_taken": None,
+                "interpretation": None, "caveats": [], "results": []}
+    return {
+        "ran_at": report.get("generated_at"),
+        "window": report.get("window"),
+        "engine": report.get("engine"),
+        "marks": report.get("marks"),
+        "pairs_evaluated": report.get("pairs_evaluated"),
+        "pairs_refused": report.get("pairs_refused"),
+        "refused_profitable": report.get("refused_profitable"),
+        "refused_unprofitable": report.get("refused_unprofitable"),
+        "total_pnl_dollars_if_all_taken": report.get("total_pnl_dollars_if_all_taken"),
+        "mean_pnl_dollars": report.get("mean_pnl_dollars"),
+        "best": report.get("best"),
+        "worst": report.get("worst"),
+        "interpretation": report.get("interpretation"),
+        "caveats": report.get("caveats") or [],
+        "results": report.get("results"),
     }
 
 
@@ -612,8 +681,9 @@ def export_dashboard(path: str = None) -> dict:
         "heartbeats": _heartbeats_section(rows),
         "adversarial": _adversarial_section(logs),
         "fill_analysis": _fill_analysis_section(rows),
-        "reproducibility": _reproducibility_section(logs),
+        "determinism": _determinism_section(logs),
         "arbiter": _arbiter_section(rows),
+        "counterfactual": _counterfactual_section(logs),
     }
 
     os.makedirs(logs, exist_ok=True)
@@ -631,12 +701,18 @@ if __name__ == "__main__":
     print(f"  gate decisions: {len(snap['gate_decisions'])} "
           f"({sum(1 for d in snap['gate_decisions'] if not d['approved'])} rejections)")
     print(f"  trades: {len(snap['trades'])}")
+    cf = snap["counterfactual"]
+    print(f"  counterfactual: {cf['refused_profitable']}/{cf['pairs_refused']} refused pairs "
+          f"profitable, ${cf['total_pnl_dollars_if_all_taken']} total")
     ab = snap["arbiter"]
     print(f"  arbiter: consulted {ab['consulted']}, unavailable {ab['unavailable']}, "
           f"rulings {ab['rulings']}")
-    rp = snap["reproducibility"]
-    print(f"  reproducibility: {rp['calls_recorded']} calls recorded; replays "
-          f"{rp['exact']} exact / {rp['equivalent']} equivalent / {rp['divergent']} divergent")
+    rp = snap["determinism"]
+    print(f"  determinism: {rp['calls_recorded']} calls recorded; {rp['replays']} replays "
+          f"-> {rp['exact']} exact / {rp['equivalent']} equivalent / {rp['divergent']} divergent"
+          + (f" ({rp['divergence_rate']:.0%}, CI "
+             f"{rp['divergence_rate_ci95']['lower']:.0%}-{rp['divergence_rate_ci95']['upper']:.0%})"
+             if rp.get("divergence_rate") is not None else ""))
     fa = snap["fill_analysis"]
     print(f"  fill analysis: {fa['orders_measured']} orders, {fa['legs_filled']}/"
           f"{fa['legs_measured']} legs filled, mean delta {fa['mean_delta']}")

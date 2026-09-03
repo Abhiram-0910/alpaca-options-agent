@@ -35,7 +35,8 @@ def demo() -> None:
             reloaded = json.load(f)
         assert reloaded == json.loads(json.dumps(snap, default=str)), "file and return value disagree"
         for key in ("schema_version", "meta", "account", "validation", "gate_decisions",
-                     "trades", "heartbeats", "adversarial", "fill_analysis", "reproducibility", "arbiter"):
+                     "trades", "heartbeats", "adversarial", "fill_analysis", "determinism", "arbiter",
+                     "counterfactual"):
             assert key in snap, f"empty export is missing top-level key {key!r}"
         assert snap["validation"] == [], snap["validation"]
         assert snap["gate_decisions"] == [] and snap["trades"] == []
@@ -49,8 +50,9 @@ def demo() -> None:
         assert snap["fill_analysis"]["mean_delta"] is None, snap["fill_analysis"]
         assert snap["fill_analysis"]["legs_filled"] == 0
         # No replay run yet must read as unmeasured, not as perfectly reproducible.
-        assert snap["reproducibility"]["divergent"] is None, snap["reproducibility"]
-        assert snap["reproducibility"]["results"] == []
+        assert snap["determinism"]["divergent"] is None, snap["determinism"]
+        assert snap["determinism"]["results"] == []
+        assert snap["counterfactual"]["pairs_refused"] is None, snap["counterfactual"]
         assert snap["arbiter"]["consulted"] == 0 and snap["arbiter"]["recent"] == []
         assert snap["meta"]["distinct_pairs_evaluated"] == 0
         assert snap["meta"]["total_validation_records"] == 0
