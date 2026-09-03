@@ -21,6 +21,31 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
 
 ## Sessions
 
+### 3 Sep 2026 — autonomy and the Alpaca CLI — *Claude Code*
+
+**Done**
+- `agent/supervisor.py` — `--loop` now survives unattended. Consecutive (not cumulative)
+  failure counting, three in a row trips the kill switch; session-window rules fire on wall
+  clock from inside the loop; heartbeat every pass including idle ones; dashboard refreshed
+  every cycle; spend cap on measured cost. `--max-cycles` bounds a verification run.
+- Verified live pre-open: three real cycles a minute apart, declined "market closed" each
+  time, no LLM call, $0 spend. Six paths in `test_supervisor.py` over injected callables.
+- `agent/alpaca_cli.py` — Alpaca CLI v0.0.14 (prebuilt binary, checksum verified) is the
+  primary read path for account and positions in the dashboard export, alpaca-py the
+  fallback. `account.source` records which answered. Order placement stays on MCP.
+- Dashboard export grew a `heartbeats` section (additive, non-breaking for Antigravity).
+
+**Fixed while testing**
+- Heartbeat stamped `consecutive_failures` at the start of a pass, so a heartbeat written
+  after a recovery still reported the old count — the log read as failing when it was not.
+
+**Deadline correction — this is the important one**
+- Thursday **3 Sep is `LAST_TRADING_DAY`**, and the 19:00 IST open on 3 Sep is *Thursday's*
+  open, not Wednesday's. There is **one session left**, not two. Entries stop 15:00 ET Thu
+  (00:30 IST Fri); the book must be flat 15:45 ET Thu (01:15 IST Fri). Friday is post-NFP
+  and submission day: the loop refuses to trade at all. Anything meant to happen "tomorrow"
+  has to happen tonight.
+
 ### 2 Sep 2026 — dashboard export contract — *Claude Code*
 
 **Done**

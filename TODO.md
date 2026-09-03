@@ -6,6 +6,12 @@ Read at session start. Updated at session end.
 
 ## Now — blocking, do in this order
 
+- [ ] **ONE SESSION LEFT.** Thu 3 Sep is `LAST_TRADING_DAY`. Entries stop 15:00 ET Thu
+      (00:30 IST Fri), flat by 15:45 ET Thu (01:15 IST Fri). Friday the loop refuses to
+      trade. The demonstration order must be placed tonight or not at all.
+- [x] Supervised unattended loop — `agent/supervisor.py`, verified 3 live cycles pre-open (3 Sep)
+- [x] Alpaca CLI wired as the account/positions read path in the dashboard export (3 Sep)
+
 - [ ] **Place the demonstration spread**, in-session, after operator review:
       `DEMONSTRATION_MODE=true python main.py --demonstrate --submit`. Dry run approved at
       $430 capital at risk — sell SPY 756P / buy 751P expiring **4 Sep**, 0.70 credit. Verify
