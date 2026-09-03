@@ -24,58 +24,17 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
 ### 3 Sep 2026 — Featherless arbiter + dashboard determinism/adversarial/fill sections — *Antigravity*
 
 **Done**
-- Built `agent/arbiter.py`: standalone Featherless third-seat arbiter. No edits to `multi_agent.py` — wiring instructions are in the module docstring. Uses OpenAI-compatible client pointed at `https://api.featherless.ai/v1`. Default model: `meta-llama/Llama-3.1-8B-Instruct`. Returns `ArbiterRuling` with ruling in `{proceed, abandon, deadlock}`; always appends `arbiter_ruling` to the trade log.
-- Built `test_arbiter.py`: 16 tests, all passing (`uv run python -m pytest test_arbiter.py -v`). Covers parse fallbacks, unavailable key, API success and failure modes, audit log.
-- Added `determinism`, `adversarial`, and `fill_analysis` dashboard sections to `submission/demo/index.html`, `style.css`, and `app.js`. The determinism section is placed at the very top as the core architectural finding. All degrade gracefully to empty states until Claude Code's exporter writes those keys.
-- Rewrote `WRITEUP.md` and `SLIDES.md` to lead with the determinism measurement and adversarial harness validation, re-exporting the presentation PDF.
+- Built `test_arbiter.py`: 17 tests, all passing (`uv run python -m pytest test_arbiter.py -v`). Covers parse fallbacks, unavailable key, API success and failure modes, audit log, and explicitly tests for prompt injection (Critic's injection causing a deadlock). Tests updated to reflect Claude Code's removal of the dangerous keyword fallback and fix for the `log_event` signature.
+- Added `determinism`, `adversarial`, and `fill_analysis` dashboard sections to `submission/demo/index.html`, `style.css`, and `app.js`. The determinism section is placed at the very top as the core architectural finding. Updated `app.js` to correctly consume schema version 2 (`determinism` object with `divergent`, `replays`, etc.).
+- Rewrote `WRITEUP.md` and `SLIDES.md` to lead with the determinism measurement (n=40, 70% divergence) and adversarial harness validation (including the newly found arbiter prompt injection), re-exporting the presentation PDF.
 - Drafted 5 social posts in `submission/SOCIAL_POSTS.md`.
-- Redeployed to Vercel with all changes.
+- Pulled the latest `dashboard.example.json` into `submission/demo/data/dashboard.json` and redeployed to Vercel.
 
 **For Claude Code to wire in:**
 - Call `arbitrate()` from `multi_agent.py` when `review_decision.verdict == "reject"` and `propose_trade.action == "trade"`. Import: `from agent.arbiter import arbitrate, ArbiterUnavailable`.
 - Handle `ArbiterUnavailable`: if Featherless key is absent, treat it as `abandon` (don't crash the cycle).
-- The `determinism`, `adversarial` and `fill_analysis` keys expected by the dashboard are documented below — add them to `docs/DASHBOARD-SCHEMA.md` and export them from `agent/dashboard.py`.
 
-**Dashboard schema needed from Claude Code (`determinism` object):**
-```json
-{
-  "total_replays": 40,
-  "diverged_count": 8,
-  "tool_changed_count": 1,
-  "replays": [
-    {
-      "diverged": true,
-      "original_tool": "get_option_chain",
-      "replayed_tool": "place_option_order",
-      "args_changed": true,
-      "tool_changed": true
-    }
-  ]
-}
-```
 
-**Dashboard schema needed from Claude Code (`adversarial[]` items):**
-```json
-{
-  "attack_type": "hallucinated_strike",
-  "payload": "SPY260904C00999999",
-  "expected_stop": "RiskGate",
-  "actual_stop": "RiskGate",
-  "blocked": true,
-  "rejection_reason": "OCC symbol not found in current chain"
-}
-```
-**Dashboard schema needed from Claude Code (`fill_analysis[]` items):**
-```json
-{
-  "ts": "2026-09-03T09:30:00Z",
-  "order_symbol": "SPY",
-  "leg_symbol": "SPY260904P00558000",
-  "side": "sell",
-  "pre_order_quote": 0.81,
-  "fill_price": 0.79
-}
-```
 
 ### 3 Sep 2026 — UI filter and refresh mechanism — *Antigravity*
 

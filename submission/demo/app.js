@@ -152,10 +152,11 @@ function renderDeterminism(determinism) {
         return;
     }
 
-    const total = determinism.total_replays ?? 0;
-    const diverged = determinism.diverged_count ?? 0;
-    const toolChanged = determinism.tool_changed_count ?? 0;
-    const divergenceRate = total > 0 ? ((diverged / total) * 100).toFixed(1) : '—';
+    const total = determinism.replays ?? 0;
+    const diverged = determinism.divergent ?? 0;
+    const toolChanged = determinism.divergent_tool_changed ?? 0;
+    const divergenceRate = determinism.divergence_rate !== null ? (determinism.divergence_rate * 100).toFixed(1) : '—';
+    const divergenceRateText = divergenceRate !== '—' ? `${divergenceRate}%` : '—';
 
     if (badge) {
         badge.textContent = `${diverged}/${total} Replays Diverged`;
@@ -163,7 +164,7 @@ function renderDeterminism(determinism) {
     }
 
     if (desc) {
-        desc.textContent = `At temperature 0, fixed seed, unchanged system_fingerprint: ${diverged} of ${total} replays diverged (${divergenceRate}%). `
+        desc.textContent = `At temperature 0, fixed seed, unchanged system_fingerprint: ${diverged} of ${total} replays diverged (${divergenceRateText}). `
             + `Of those, ${toolChanged} changed the tool called — not just arguments. `
             + `One flipped from reading a chain to attempting an order. This is why authority sits in deterministic Python.`;
     }
@@ -184,12 +185,12 @@ function renderDeterminism(determinism) {
             </div>
             <div class="card">
                 <div class="card-label">Divergence Rate</div>
-                <div class="card-value">${divergenceRate}%</div>
+                <div class="card-value">${divergenceRateText}</div>
             </div>
         `;
     }
 
-    const replays = determinism.replays;
+    const replays = determinism.results;
     if (Array.isArray(replays) && replays.length > 0 && tableContainer && tbody) {
         tableContainer.style.display = '';
         tbody.innerHTML = replays.map((r, i) => {
@@ -215,37 +216,37 @@ function renderAdversarial(adversarial) {
     const badge = document.getElementById('adversarial-badge');
     const desc = document.getElementById('adversarial-desc');
 
-    if (!adversarial || !Array.isArray(adversarial) || adversarial.length === 0) {
+    if (!adversarial || typeof adversarial !== 'object' || !Array.isArray(adversarial.results)) {
         if (badge) badge.textContent = 'No data';
         if (desc) desc.textContent = 'Adversarial harness data will appear once the agent runs the attack suite.';
         return;
     }
 
-    const blocked = adversarial.filter(a => a.blocked === true).length;
-    const total = adversarial.length;
+    const total = adversarial.attacks_run ?? 0;
+    const blockedCount = adversarial.blocked ?? 0;
 
     if (badge) {
-        badge.textContent = `${blocked}/${total} Attacks Blocked`;
-        badge.className = blocked === total ? 'badge danger' : 'badge warning';
+        badge.textContent = `${blockedCount}/${total} Attacks Blocked`;
+        badge.className = blockedCount === total ? 'badge danger' : 'badge warning';
     }
     if (desc) {
-        desc.textContent = `The risk gate blocked ${blocked} of ${total} adversarial probes. Every attack, its payload, and the exact rejection reason is listed below.`;
+        desc.textContent = `The risk gate blocked ${blockedCount} of ${total} adversarial probes. Orders submitted to account: ${adversarial.orders_submitted}. Masked by validation gate: ${adversarial.masked_by_validation_gate}.`;
     }
 
-    tbody.innerHTML = adversarial.map(attack => {
-        const blocked = attack.blocked === true;
-        const resultClass = blocked ? 'status-pass' : 'status-fail';
-        const resultText = blocked ? '✓ BLOCKED' : '✗ PASSED';
-        // Show expected vs actual stopping layer
-        const expectedStop = attack.expected_stop || '-';
-        const actualStop = attack.actual_stop || (blocked ? '(stopped)' : '(leaked)');
+    tbody.innerHTML = adversarial.results.map(attack => {
+        const isBlocked = attack.verdict === 'blocked';
+        const resultClass = isBlocked ? 'status-pass' : 'status-fail';
+        const resultText = isBlocked ? '✓ BLOCKED' : '✗ GOT THROUGH';
+        const expectedStop = attack.expected_to_be_stopped_because || '-';
+        const actualStop = attack.approved === false ? 'RiskGate' : (isBlocked ? 'Other' : 'None');
+        
         return `
             <tr>
-                <td class="mono">${attack.attack_type || '-'}</td>
-                <td class="payload-cell" title="${(attack.payload || '').replace(/"/g, '&quot;')}">${attack.payload || '-'}</td>
+                <td class="mono">${attack.name || attack.id || '-'}</td>
+                <td class="payload-cell" title="${(JSON.stringify(attack.payload) || '').replace(/"/g, '&quot;')}">${typeof attack.payload === 'string' ? attack.payload : JSON.stringify(attack.payload)}</td>
                 <td class="mono">${expectedStop}</td>
                 <td class="mono">${actualStop}</td>
-                <td style="max-width:300px; font-size:0.8rem; color: var(--text-secondary)">${attack.rejection_reason || (blocked ? '(blocked before reaching gate)' : 'Not rejected')}</td>
+                <td style="max-width:300px; font-size:0.8rem; color: var(--text-secondary)">${attack.rejection_reason || '-'}</td>
                 <td class="${resultClass}">${resultText}</td>
             </tr>
         `;
@@ -256,35 +257,150 @@ function renderFillAnalysis(fillAnalysis) {
     const tbody = document.getElementById('fill-body');
     const badge = document.getElementById('fill-badge');
 
-    if (!fillAnalysis || !Array.isArray(fillAnalysis) || fillAnalysis.length === 0) {
-        if (badge) badge.textContent = 'No fills yet';
+    if (!fillAnalysis || typeof fillAnalysis !== 'object' || !Array.isArray(fillAnalysis.orders)) {
+        if (badge) badge.textContent = 'No data';
+        return;
+    }
+    
+    if (fillAnalysis.orders.length === 0) {
+        if (badge) badge.textContent = '0 fills';
         return;
     }
 
-    if (badge) badge.textContent = `${fillAnalysis.length} leg(s)`;
+    if (badge) badge.textContent = `${fillAnalysis.legs_filled}/${fillAnalysis.legs_measured} Filled`;
 
-    tbody.innerHTML = fillAnalysis.map(fill => {
-        const delta = fill.fill_price !== null && fill.pre_order_quote !== null
-            ? (fill.fill_price - fill.pre_order_quote)
-            : null;
+    const allLegs = [];
+    fillAnalysis.orders.forEach(o => {
+        if (Array.isArray(o.legs)) {
+            o.legs.forEach(l => {
+                allLegs.push({ orderTs: o.ts, orderSymbol: o.symbol, ...l });
+            });
+        }
+    });
+
+    tbody.innerHTML = allLegs.map(fill => {
+        const delta = fill.delta;
         let deltaClass = 'fill-delta-zero';
         let deltaText = '-';
-        if (delta !== null) {
+        if (delta !== null && delta !== undefined) {
             deltaText = (delta >= 0 ? '+' : '') + delta.toFixed(4);
             deltaClass = delta < 0 ? 'fill-delta-neg' : (delta > 0 ? 'fill-delta-pos' : 'fill-delta-zero');
         }
         return `
             <tr>
-                <td class="mono">${fill.ts ? new Date(fill.ts).toLocaleTimeString() : '-'}</td>
-                <td class="mono">${fill.order_symbol || '-'}</td>
-                <td class="mono" style="font-size:0.75rem">${fill.leg_symbol || '-'}</td>
+                <td class="mono">${fill.orderTs ? new Date(fill.orderTs).toLocaleTimeString() : '-'}</td>
+                <td class="mono">${fill.orderSymbol || fill.symbol || '-'}</td>
+                <td class="mono" style="font-size:0.75rem">${fill.leg_symbol || fill.contract_symbol || '-'}</td>
                 <td class="mono">${fill.side || '-'}</td>
-                <td class="mono">${fill.pre_order_quote !== null ? formatNumber(fill.pre_order_quote, 4) : '-'}</td>
-                <td class="mono">${fill.fill_price !== null ? formatNumber(fill.fill_price, 4) : '-'}</td>
+                <td class="mono">${fill.indicative_mid !== null && fill.indicative_mid !== undefined ? formatNumber(fill.indicative_mid, 4) : '-'}</td>
+                <td class="mono">${fill.filled_price !== null && fill.filled_price !== undefined ? formatNumber(fill.filled_price, 4) : '-'}</td>
                 <td class="${deltaClass}">${deltaText}</td>
             </tr>
         `;
     }).join('');
+}
+
+function renderCounterfactual(counterfactual) {
+    const summary = document.getElementById('counterfactual-summary');
+    const badge = document.getElementById('counterfactual-badge');
+    const desc = document.getElementById('counterfactual-desc');
+
+    if (!counterfactual || typeof counterfactual !== 'object') {
+        if (badge) badge.textContent = 'No data';
+        if (desc) desc.textContent = 'Counterfactual data not available.';
+        return;
+    }
+
+    if (badge) badge.textContent = `$${counterfactual.total_pnl_dollars_if_all_taken?.toFixed(2) || '0.00'}`;
+    
+    if (desc) {
+        desc.textContent = `The gate refused strategies that would have returned +$${counterfactual.total_pnl_dollars_if_all_taken?.toFixed(2) || '0.00'}. `
+            + `Of the refused pairs, ${counterfactual.refused_profitable} were profitable and ${counterfactual.refused_unprofitable} were not. `
+            + `These are marks, not closed results.`;
+    }
+
+    if (summary) {
+        summary.innerHTML = `
+            <div class="card">
+                <div class="card-label">Total PnL if Taken</div>
+                <div class="card-value" style="color: ${counterfactual.total_pnl_dollars_if_all_taken > 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">
+                    $${counterfactual.total_pnl_dollars_if_all_taken?.toFixed(2) || '0.00'}
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-label">Refused Profitable</div>
+                <div class="card-value">${counterfactual.refused_profitable ?? 0}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Refused Unprofitable</div>
+                <div class="card-value">${counterfactual.refused_unprofitable ?? 0}</div>
+            </div>
+        `;
+    }
+}
+
+function renderArbiter(arbiter) {
+    const summary = document.getElementById('arbiter-summary');
+    const badge = document.getElementById('arbiter-badge');
+    const desc = document.getElementById('arbiter-desc');
+
+    if (!arbiter || typeof arbiter !== 'object') {
+        if (badge) badge.textContent = 'No data';
+        if (desc) desc.textContent = 'Arbiter data not available.';
+        return;
+    }
+
+    if (badge) badge.textContent = `${arbiter.consulted ?? 0} Consulted`;
+    if (desc) desc.textContent = `Third-seat model: ${arbiter.model || 'Unknown'}. Fails closed: ${arbiter.fails_closed || 'Yes'}.`;
+
+    if (summary) {
+        summary.innerHTML = `
+            <div class="card">
+                <div class="card-label">Consultations</div>
+                <div class="card-value">${arbiter.consulted ?? 0}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Overruled Critic (Proceed)</div>
+                <div class="card-value">${arbiter.overruled_critic ?? 0}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Unavailable</div>
+                <div class="card-value">${arbiter.unavailable ?? 0}</div>
+            </div>
+        `;
+    }
+}
+
+function renderHeartbeats(heartbeats) {
+    const summary = document.getElementById('heartbeats-summary');
+    const badge = document.getElementById('heartbeats-badge');
+    const desc = document.getElementById('heartbeats-desc');
+
+    if (!heartbeats || typeof heartbeats !== 'object') {
+        if (badge) badge.textContent = 'No data';
+        if (desc) desc.textContent = 'Heartbeats data not available.';
+        return;
+    }
+
+    if (badge) badge.textContent = `${heartbeats.total_cycles ?? 0} Cycles`;
+    if (desc) desc.textContent = `Last seen: ${heartbeats.last_seen_at ? new Date(heartbeats.last_seen_at).toLocaleString() : 'Never'}`;
+
+    if (summary) {
+        summary.innerHTML = `
+            <div class="card">
+                <div class="card-label">Cycles Traded</div>
+                <div class="card-value">${heartbeats.cycles_traded ?? 0}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Cycles Declined</div>
+                <div class="card-value">${heartbeats.cycles_declined ?? 0}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Cycles Failed</div>
+                <div class="card-value">${heartbeats.cycles_failed ?? 0}</div>
+            </div>
+        `;
+    }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -296,6 +412,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderValidation(data.meta, data.validation);
         renderAdversarial(data.adversarial);
         renderFillAnalysis(data.fill_analysis);
+        renderCounterfactual(data.counterfactual);
+        renderArbiter(data.arbiter);
+        renderHeartbeats(data.heartbeats);
         renderFooter(data.meta, data.trades);
     }
 });

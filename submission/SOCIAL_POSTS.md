@@ -6,7 +6,9 @@
 
 ## Post 1: The Determinism Finding
 
-The central problem in agentic trading isn't intelligence — it's reproducibility. We ran our @AlpacaHQ options agent 40 times at temperature 0 with a fixed seed. A significant fraction diverged, and some even flipped the tool they called (from reading a chain to attempting an order). 
+The central problem in agentic trading isn't intelligence — it's reproducibility. We ran our @AlpacaHQ options agent 40 times at temperature 0 with a fixed seed. It diverged 70% of the time (95% CI 54.6-81.9%). 
+
+Worse: 19 of those 28 divergences changed the actual *tool* it called, not just the arguments. One flipped from reading a chain to attempting an order.
 
 This is exactly why our @lablabai hackathon submission places execution authority in deterministic Python, not the LLM. 
 
@@ -14,13 +16,11 @@ This is exactly why our @lablabai hackathon submission places execution authorit
 
 ---
 
-## Post 2: Adversarial Risk Gate
+## Post 2: Adversarial Risk Gate & Counterfactuals
 
-To prove our risk gate works, we ran our agent against itself using an adversarial harness. 
+To prove our risk gate works, we ran our agent against itself using an adversarial harness. It found and closed three critical holes: a buy-1/sell-2 ratio exploit, a hallucinated strike, and an active prompt injection in our arbiter model.
 
-The harness found two critical holes: a buy-1/sell-2 payload that bypassed leg pricing, and a hallucinated strike that didn't exist on the chain. Both were successfully blocked by our deterministic Python layer before reaching the @AlpacaHQ API. 
-
-Building agentic trading systems means building systems that survive adversarial inputs. Built for the @lablabai hackathon.
+Yes, this gate has a cost: it refused strategies that would have returned +$1,326.64 today (15 of 21 refused pairs were profitable). But it refuses on the width of the bootstrap interval, never the sign of the latest observation. Rigor over luck. Built for the @lablabai hackathon.
 
 #CyberSecurity #AI #TradingSystems #AlpacaAPI
 

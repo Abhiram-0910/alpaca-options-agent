@@ -10,5 +10,5 @@ When the agent executes a new cycle and updates `logs/dashboard.json`, you must 
 Run this single command from the repository root:
 
 ```bash
-cp logs/dashboard.json submission/demo/data/dashboard.json && cd submission/demo && npx vercel --prod --yes
+cp ../alpaca/logs/dashboard.json submission/demo/data/dashboard.json && cd submission/demo && npx vercel --prod --yes
 ```
