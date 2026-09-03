@@ -9,9 +9,18 @@ Read at session start. Updated at session end.
 - [ ] **ONE SESSION LEFT.** Thu 3 Sep is `LAST_TRADING_DAY`. Entries stop 15:00 ET Thu
       (00:30 IST Fri), flat by 15:45 ET Thu (01:15 IST Fri). Friday the loop refuses to
       trade. The demonstration order must be placed tonight or not at all.
+- [ ] **Antigravity — dashboard does not render 6 of 12 sections.** Refreshing the data is
+      necessary but NOT sufficient: `determinism` field names all differ
+      (`total_replays`/`diverged_count`/`tool_changed_count` vs `replays`/`divergent`/
+      `divergent_tool_changed`), `adversarial` and `fill_analysis` are read as arrays but
+      exported as objects, and `counterfactual`/`arbiter`/`heartbeats` have no renderer.
+      Deployed JSON is still schema_version 1 from 2 Sep 10:22 UTC.
 - [ ] Tell Antigravity: export `schema_version` is now **2** — `reproducibility` renamed to
       `determinism`, `counterfactual` added.
 - [ ] Run `python main.py --preflight` at 18:50 IST. Currently 11 green / 1 warn / 0 red.
+- [ ] **`FEATHERLESS_API_KEY` STILL NOT SET** — no such line in `.env`. Until it is, no
+      three-model cycle can run and the council is two models. Endpoint verified reachable;
+      only the credential is missing.
 - [ ] **Set `FEATHERLESS_API_KEY`** or drop the third-seat claim from the submission. The
       arbiter is wired and fails closed, but the council is two models until the key exists.
 - [ ] Antigravity: 3 of 16 arbiter tests need updating — two assert a removed injection

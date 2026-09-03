@@ -21,6 +21,48 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
 
 ## Sessions
 
+### 3 Sep 2026 — dashboard diagnosis; arbiter still unreachable — *Claude Code*
+
+**BLOCKED: `FEATHERLESS_API_KEY` is still absent.** Not in `.env` (no such line at all,
+file last modified 09:41 today), not in the shell, not in the submission worktree. No
+three-model cycle has been run and no council attack has been run against a live arbiter.
+Nothing was synthesised. The endpoint itself is fine — `api.featherless.ai/v1/models`
+returns HTTP 200 and an unauthenticated call returns
+`{"code":"unauthorized","message":"You must be signed in..."}` — so the only blocker is the
+credential.
+
+**Deployed dashboard diagnosis (Antigravity owns the fix; this is diagnosis only)**
+
+Live data at `/data/dashboard.json` is **schema_version 1, generated 2026-09-02T10:22 UTC**
+— yesterday's first export. Six sections are absent from it entirely: `adversarial`,
+`arbiter`, `counterfactual`, `determinism`, `fill_analysis`, `heartbeats`.
+
+But refreshing the data alone will NOT fix it. I served the deployed `index.html`/`app.js`
+against today's real schema_version 2 export and screenshotted the result. Three separate
+problems, stacked:
+
+1. **`determinism` renders as all zeros.** `app.js` reads `total_replays`, `diverged_count`,
+   `tool_changed_count` and per-item `r.diverged` / `r.tool_changed`. The export emits
+   `replays`, `divergent`, `divergent_tool_changed`, and `results[].status`. Every field
+   name differs, so the panel reads "0 of 0 replays diverged (—%)" while the data says
+   40 replays, 28 divergent, 70%.
+2. **`adversarial` stays "NO DATA".** `app.js` treats it as an array (`.filter`, `.length`,
+   `.map`, items with `.blocked`). The export emits an object with `results[]`, items
+   carrying `verdict`/`approved`.
+3. **`fill_analysis` expects an array** of leg rows with `leg_symbol`, `order_symbol`,
+   `pre_order_quote`, `fill_price`. The export emits an object with `orders[] -> legs[]`
+   using `symbol`, `indicative_mid`, `filled_price`. It currently shows "No fills yet",
+   which is right by accident — there are no fills — and would still be wrong once there are.
+4. **`counterfactual`, `arbiter` and `heartbeats` have no renderer at all** — no mention in
+   `index.html` or `app.js`.
+
+What DOES render correctly with real values: account, gate decisions, and the validation
+graveyard — including the 21-distinct-pairs vs 24-records distinction and the IWM
+`covered_call` primary-PASS / extended-FAIL / sub-period split.
+
+Screenshots: `local_v2.png` (deployed frontend + real v2 data) and `live.png` (site as it
+stands) in this session's scratchpad.
+
 ### 3 Sep 2026 — counterfactual, determinism at n=40, pre-flight — *Claude Code*
 
 **The counterfactual costs us, and it should be quoted that way**
