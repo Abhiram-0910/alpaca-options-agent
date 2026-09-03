@@ -21,6 +21,36 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
 
 ## Sessions
 
+### 3 Sep 2026 — adversarial self-test, fill instrumentation, replay — *Claude Code*
+
+**Done**
+- `agent/adversarial.py` + `--adversarial`: 13 hostile payloads through the real RiskGate.
+  Nothing reaches Alpaca, proved by counting orders on the account either side (2 → 2).
+- `agent/fill_analysis.py`: indicative quote before submission vs simulated fill after,
+  per leg, off the critical path (quote comes from the chain already fetched).
+- `agent/replay.py` + `--replay`: every LLM call recorded whole; decisions re-runnable.
+
+**Two gate holes found and fixed**
+- `ratio_qty` was read by nothing. A buy-1/sell-2 was priced as a 1:1 vertical, so the
+  second short contract was naked and charged nothing. Now refused.
+- A contract not on the live chain was approved. The gate does no network I/O, so it now
+  takes an optional `known_contracts` set; the demonstration path supplies its chain.
+
+**The finding that matters most**
+- The first adversarial run said 13/13 blocked and was nearly worthless: six attacks died at
+  the validation gate before reaching the defence under test. Every attack now runs twice,
+  and the verdict comes from the isolated run.
+- **Replay: 2 exact, 1 equivalent, 5 divergent out of 8** — at temperature 0, fixed seed,
+  same model, *unchanged* `system_fingerprint`. One divergence flipped `get_option_chain`
+  (a read) to `place_option_order` (an order) on identical inputs. This is the strongest
+  argument in the project for the deterministic gate, and belongs in the write-up.
+- Temperature and seed were previously unset everywhere — the runs were not attempting
+  determinism at all. Now `OPENAI_TEMPERATURE=0`, `OPENAI_SEED=42`, env-overridable.
+
+**Not answered**
+- Feed-vs-fill: instrumentation is in place but both existing orders were canceled at
+  `filled_qty` 0, so there is no fill to compare. Answers on tonight's fill.
+
 ### 3 Sep 2026 — autonomy and the Alpaca CLI — *Claude Code*
 
 **Done**
