@@ -32,6 +32,7 @@ the thing we actually care about.
 """
 import asyncio
 import hashlib
+import math
 import json
 import os
 from datetime import datetime, timezone
@@ -41,7 +42,7 @@ from agent.config import CONFIG
 LOG_NAME = "llm_calls.jsonl"
 # Each replay resends the full tool schemas (~21K tokens), so a back-to-back batch trips the
 # key's tokens-per-minute ceiling. Spacing is cheaper than a partial report.
-RETRY_SPACING_SECONDS = 20
+RETRY_SPACING_SECONDS = 12
 
 
 def _path() -> str:
@@ -207,7 +208,30 @@ async def replay(did: str) -> dict:
     }
 
 
-async def replay_many(limit: int = 5, path: str = None) -> dict:
+def _wilson(successes: int, n: int, z: float = 1.96) -> tuple:
+    """Wilson score interval for a proportion.
+
+    Wilson rather than the normal approximation on purpose: at these sample sizes and with a
+    rate that may sit near 0 or 1, the normal interval runs past the [0,1] bounds and reads
+    as more precise than the data supports.
+    """
+    if n == 0:
+        return (None, None)
+    p = successes / n
+    d = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / d
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return (round(max(0.0, centre - half), 4), round(min(1.0, centre + half), 4))
+
+
+def _tools_only(calls: list) -> list:
+    """Just the tool names, so a divergence that changed WHICH tool is called can be told
+    apart from one that only changed the arguments. The first is an action change; the
+    second may be cosmetic."""
+    return [name for name, _args in calls]
+
+
+async def replay_many(limit: int = 5, path: str = None, repeats: int = 1) -> dict:
     """Replay the most recent `limit` distinct decisions and write a report.
 
     A replay only re-issues the request to the model. It never executes what comes back --
@@ -215,14 +239,20 @@ async def replay_many(limit: int = 5, path: str = None) -> dict:
     asking to place an order where the recorded one only read a chain.
     """
     path = path or os.path.join(CONFIG.logs_dir, "replay_report.json")
-    seen, ids = set(), []
+    seen, distinct = set(), []
     for r in reversed(load_calls()):
         did = r.get("decision_id")
         if did and did not in seen:
             seen.add(did)
-            ids.append(did)
-        if len(ids) >= limit:
+            distinct.append(did)
+        if len(distinct) >= limit:
             break
+
+    # With fewer distinct decisions than replays wanted, cycle through them. Replaying one
+    # fixed input repeatedly is the more direct test of the claim anyway: the question is
+    # whether identical inputs give identical outputs, and that needs repeated trials on the
+    # same input, not one trial each on many.
+    ids = [distinct[i % len(distinct)] for i in range(limit * repeats)] if distinct else []
 
     results = []
     for i, did in enumerate(ids):
@@ -236,13 +266,27 @@ async def replay_many(limit: int = 5, path: str = None) -> dict:
             r = await replay(did)
         results.append(r)
     counted = [r for r in results if r["status"] in ("exact", "equivalent", "divergent")]
+    divergent = [r for r in counted if r["status"] == "divergent"]
+    # A divergence that changed WHICH tool is called is an action change. One that kept the
+    # same tools and altered only their arguments is a weaker result and is counted apart.
+    tool_changed = [r for r in divergent
+                    if _tools_only(r["recorded_tool_calls"]) != _tools_only(r["replayed_tool_calls"])]
+    n = len(counted)
+    lo, hi = _wilson(len(divergent), n)
     report = {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "replays": len(counted),
+        "replays": n,
+        "distinct_decisions_replayed": len(set(ids)),
+        "repeats_per_decision": repeats,
         "exact": sum(1 for r in counted if r["status"] == "exact"),
         "equivalent": sum(1 for r in counted if r["status"] == "equivalent"),
-        "divergent": sum(1 for r in counted if r["status"] == "divergent"),
+        "divergent": len(divergent),
+        "divergence_rate": round(len(divergent) / n, 4) if n else None,
+        "divergence_rate_ci95": {"lower": lo, "upper": hi, "method": "Wilson score"},
+        "divergent_tool_changed": len(tool_changed),
+        "divergent_args_only": len(divergent) - len(tool_changed),
+        "failed_to_replay": sum(1 for r in results if r["status"] == "replay_failed"),
         "across_fingerprint_change": sum(1 for r in counted if r["fingerprint_changed"]),
         "conditions": ("temperature 0, fixed seed, same model -- the conditions under which "
                        "OpenAI's best-effort determinism is supposed to hold"),
