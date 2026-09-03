@@ -21,6 +21,33 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
 
 ## Sessions
 
+### 3 Sep 2026 — arbiter wired, council attacked — *Claude Code*
+
+**Done**
+- `agent/arbiter.py` brought onto main from the submission worktree (it was untracked
+  there) and wired into `multi_agent.py` at the Critic-reject branch only.
+- Advisory authority enforced structurally: `proceed` only declines to return, then falls
+  through to the same RiskGate path. `test_adversarial.py` asserts this against the source.
+- Five council attacks added; 18 attacks total, 18 blocked, 0 orders (account 2 → 2).
+- `arbiter` section added to the dashboard export.
+
+**Two bugs in the module as delivered — ANTIGRAVITY PLEASE READ**
+- `log_event` was called with a positional dict; the real signature is
+  `log_event(event_type, **fields)`. That is a `TypeError` at the only moment the arbiter is
+  ever invoked. It passed 16/16 because the test mocks `log_event` as `lambda *a, **kw`,
+  so the real signature was never exercised.
+- `_parse_ruling`'s keyword fallback ruled `proceed` on any response containing that word,
+  checked before `abandon`. The arbiter's prompt embeds the Critic's rationale verbatim, so
+  injected text could flip the ruling. Removed — unparseable now means deadlock.
+- **3 of the 16 tests now fail** against the fixed module and need updating in that worktree:
+  `test_keyword_fallback_proceed`, `test_keyword_fallback_abandon` (assert the removed
+  vulnerability) and `test_arbitrate_abandon` (asserts the positional `log_event` shape).
+
+**The council is two models, not three**
+- `FEATHERLESS_API_KEY` is not set in `.env`, the shell, or the submission worktree — only
+  the placeholder in `.env.example`. The seat is reached and correctly abandons. A genuine
+  three-model cycle has never run.
+
 ### 3 Sep 2026 — adversarial self-test, fill instrumentation, replay — *Claude Code*
 
 **Done**

@@ -9,6 +9,11 @@ Read at session start. Updated at session end.
 - [ ] **ONE SESSION LEFT.** Thu 3 Sep is `LAST_TRADING_DAY`. Entries stop 15:00 ET Thu
       (00:30 IST Fri), flat by 15:45 ET Thu (01:15 IST Fri). Friday the loop refuses to
       trade. The demonstration order must be placed tonight or not at all.
+- [ ] **Set `FEATHERLESS_API_KEY`** or drop the third-seat claim from the submission. The
+      arbiter is wired and fails closed, but the council is two models until the key exists.
+- [ ] Antigravity: 3 of 16 arbiter tests need updating — two assert a removed injection
+      vulnerability, one asserts the crashing `log_event` call shape.
+- [x] Arbiter wired as advisory third seat; 5 council attacks added, 18/18 blocked (3 Sep)
 - [x] Adversarial self-test — 13 attacks, 2 gate holes found and fixed (3 Sep)
 - [x] Fill-gap instrumentation — captures on tonight's fill, unanswered until then (3 Sep)
 - [x] Replay determinism — 5 of 8 divergent at temp 0 / fixed seed / same fingerprint (3 Sep)
