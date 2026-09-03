@@ -360,6 +360,36 @@ async def _run_critic(anthropic, proposal: dict, backtest_summary: str) -> dict:
     return {"verdict": verdict, "cost_usd": cost}
 
 
+async def _consult_arbiter(proposal: dict, verdict: dict) -> dict:
+    """Ask the third seat to rule on a Critic veto. Always returns a dict; never raises.
+
+    Every failure of the arbiter -- no API key, a network error, a timeout, an empty or
+    unparseable response -- resolves to a non-"proceed" ruling, which the caller treats as
+    "the veto stands". A third seat that cannot answer must not be able to unblock a trade.
+    """
+    from agent.arbiter import arbitrate, ArbiterUnavailable
+    from agent.backtest_evidence import load_backtest_summary
+    try:
+        ruling = await arbitrate(
+            proposal=proposal,
+            critic_concerns=verdict.get("concerns") or [],
+            critic_rationale=verdict.get("rationale") or "",
+            validation_summary=load_backtest_summary(),
+        )
+        return {"ruling": ruling.ruling, "rationale": ruling.rationale,
+                "model": ruling.model, "latency_ms": ruling.latency_ms,
+                "error": ruling.error, "available": True}
+    except ArbiterUnavailable as exc:
+        # Documented behaviour: an unconfigured third seat is an abandon, not a crash.
+        log_event("arbiter_unavailable", reason=str(exc))
+        return {"ruling": "abandon", "rationale": f"arbiter unavailable: {exc}",
+                "model": None, "latency_ms": None, "error": str(exc), "available": False}
+    except Exception as exc:
+        log_event("arbiter_failed", error=f"{type(exc).__name__}: {exc}")
+        return {"ruling": "deadlock", "rationale": f"arbiter call failed: {exc}",
+                "model": None, "latency_ms": None, "error": str(exc), "available": False}
+
+
 async def run_cycle(provider: str = "openai") -> dict:
     assert_paper_trading()
     assert_not_killed()
@@ -408,15 +438,38 @@ async def run_cycle(provider: str = "openai") -> dict:
         verdict = critic_result["verdict"]
         log_event("critic_verdict", verdict=verdict)
 
+        arbiter_ruling = None
         if verdict.get("verdict") != "approve":
             alert("proposal_vetoed_by_critic", symbol=proposal.get("symbol"),
                   strategy=proposal.get("strategy"), reason=verdict.get("rationale"))
-            log_event("multi_agent_cycle_complete", proposal=proposal, verdict=verdict,
-                       cost_usd=round(total_cost, 5))
-            return {"tool_calls": total_tool_calls, "api_calls": total_api_calls,
-                    "cost_usd": round(total_cost, 5), "rejections": [verdict.get("rationale", "")],
-                    "summary": f"Critic REJECTED the proposal for {proposal.get('symbol')} "
-                               f"({proposal.get('strategy')}): {verdict.get('rationale', '')}"}
+
+            # Third seat. Called only here -- a genuine disagreement, where the Proposer asked
+            # to trade and the Critic vetoed. Never on a Critic approval (nothing to resolve)
+            # and never on a Proposer skip (nothing was proposed).
+            arbiter_ruling = await _consult_arbiter(proposal, verdict)
+
+            # ADVISORY, and enforced structurally rather than promised in a comment. "proceed"
+            # does not execute anything: it only declines to return here, so control falls
+            # through to the same strategy cross-check, the same RiskGate.check() and the same
+            # order path that a Critic approval would have reached. There is no branch in this
+            # module that reaches an order without passing through them, so the arbiter cannot
+            # widen what is permitted -- at most it can decline to narrow it. Everything else
+            # ("abandon", "deadlock", an unparseable ruling, a missing API key, a timeout)
+            # ends the cycle here, so every failure mode of the third seat fails closed.
+            if arbiter_ruling["ruling"] != "proceed":
+                log_event("multi_agent_cycle_complete", proposal=proposal, verdict=verdict,
+                           arbiter=arbiter_ruling, cost_usd=round(total_cost, 5))
+                return {"tool_calls": total_tool_calls, "api_calls": total_api_calls,
+                        "cost_usd": round(total_cost, 5),
+                        "rejections": [verdict.get("rationale", "")],
+                        "arbiter": arbiter_ruling,
+                        "summary": f"Critic REJECTED the proposal for {proposal.get('symbol')} "
+                                   f"({proposal.get('strategy')}): {verdict.get('rationale', '')}"
+                                   f" — arbiter ruled {arbiter_ruling['ruling']}: "
+                                   f"{arbiter_ruling['rationale']}"}
+
+            alert("arbiter_overruled_critic", symbol=proposal.get("symbol"),
+                  strategy=proposal.get("strategy"), rationale=arbiter_ruling["rationale"])
 
         # Critic approved — account/positions were fetched at the top of the proposer stage;
         # refresh once more so RiskGate has current numbers before the actual execution decision.
@@ -431,6 +484,10 @@ async def run_cycle(provider: str = "openai") -> dict:
             account_info, positions = {}, []
         risk_gate.refresh(account_info, positions)
 
+        # Re-stated at the execution boundary because it is the property that matters most:
+        # if the arbiter overruled the Critic, everything below still runs unchanged. The
+        # council's job ended at "should this be considered"; whether it is permitted is the
+        # gate's alone.
         symbol = proposal.get("symbol")
         strategy = proposal.get("strategy")
         # RiskGate's backtest-validation gate is symbol-level only (a bare place_option_order

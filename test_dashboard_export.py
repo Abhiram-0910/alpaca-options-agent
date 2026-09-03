@@ -35,7 +35,7 @@ def demo() -> None:
             reloaded = json.load(f)
         assert reloaded == json.loads(json.dumps(snap, default=str)), "file and return value disagree"
         for key in ("schema_version", "meta", "account", "validation", "gate_decisions",
-                     "trades", "heartbeats", "adversarial", "fill_analysis", "reproducibility"):
+                     "trades", "heartbeats", "adversarial", "fill_analysis", "reproducibility", "arbiter"):
             assert key in snap, f"empty export is missing top-level key {key!r}"
         assert snap["validation"] == [], snap["validation"]
         assert snap["gate_decisions"] == [] and snap["trades"] == []
@@ -51,6 +51,7 @@ def demo() -> None:
         # No replay run yet must read as unmeasured, not as perfectly reproducible.
         assert snap["reproducibility"]["divergent"] is None, snap["reproducibility"]
         assert snap["reproducibility"]["results"] == []
+        assert snap["arbiter"]["consulted"] == 0 and snap["arbiter"]["recent"] == []
         assert snap["meta"]["distinct_pairs_evaluated"] == 0
         assert snap["meta"]["total_validation_records"] == 0
         # No credentials must degrade to nulls with a stated reason, never to a fake balance.

@@ -501,6 +501,44 @@ def _reproducibility_section(logs: str) -> dict:
     return section
 
 
+# --- arbiter ---------------------------------------------------------------
+
+def _arbiter_section(rows: list) -> dict:
+    """The third seat: how often it ruled, which way, and whether it was reachable.
+
+    `authority` is the property the whole design rests on, so it is stated in the data and
+    not only in prose: the ruling is advisory, and `overruled_critic` counts the times it
+    declined to end a cycle -- never the times it caused an order. An order still exists only
+    if the deterministic gate approved it, which is why `orders_from_overrule` is read from
+    gate decisions rather than from the council.
+    """
+    rulings = [r for r in rows if r.get("type") == "arbiter_ruling"]
+    unavailable = [r for r in rows if r.get("type") in ("arbiter_unavailable", "arbiter_failed")]
+    by = {k: sum(1 for r in rulings if r.get("ruling") == k)
+          for k in ("proceed", "abandon", "deadlock")}
+    return {
+        "consulted": len(rulings),
+        "unavailable": len(unavailable),
+        "rulings": by,
+        "overruled_critic": by["proceed"],
+        "model": next((r.get("model") for r in reversed(rulings) if r.get("model")), None),
+        "authority": ("advisory only — a 'proceed' ruling does not execute anything, it only "
+                      "declines to end the cycle, and control then falls through to the same "
+                      "strategy cross-check and RiskGate.check() a Critic approval reaches"),
+        "invoked_when": "the Critic rejects a trade the Proposer proposed, and only then",
+        "fails_closed": ("any ruling other than 'proceed' — including an unparseable or empty "
+                          "response, a timeout, or an absent API key — leaves the veto standing"),
+        "recent": [{
+            "ts": r.get("ts"), "ruling": r.get("ruling"), "rationale": r.get("rationale"),
+            "model": r.get("model"), "latency_ms": r.get("latency_ms"),
+            "proposal_symbol": r.get("proposal_symbol"),
+            "proposal_strategy": r.get("proposal_strategy"),
+            "error": r.get("error"),
+        } for r in rulings[-25:]],
+        "unavailable_reasons": [r.get("reason") or r.get("error") for r in unavailable[-10:]],
+    }
+
+
 # --- meta ------------------------------------------------------------------
 
 def _bootstrap_meta() -> dict:
@@ -575,6 +613,7 @@ def export_dashboard(path: str = None) -> dict:
         "adversarial": _adversarial_section(logs),
         "fill_analysis": _fill_analysis_section(rows),
         "reproducibility": _reproducibility_section(logs),
+        "arbiter": _arbiter_section(rows),
     }
 
     os.makedirs(logs, exist_ok=True)
@@ -592,6 +631,9 @@ if __name__ == "__main__":
     print(f"  gate decisions: {len(snap['gate_decisions'])} "
           f"({sum(1 for d in snap['gate_decisions'] if not d['approved'])} rejections)")
     print(f"  trades: {len(snap['trades'])}")
+    ab = snap["arbiter"]
+    print(f"  arbiter: consulted {ab['consulted']}, unavailable {ab['unavailable']}, "
+          f"rulings {ab['rulings']}")
     rp = snap["reproducibility"]
     print(f"  reproducibility: {rp['calls_recorded']} calls recorded; replays "
           f"{rp['exact']} exact / {rp['equivalent']} equivalent / {rp['divergent']} divergent")

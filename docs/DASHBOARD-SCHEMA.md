@@ -59,7 +59,8 @@ Consequences worth knowing before you write a chart:
   "heartbeats":     { ... },
   "adversarial":    { ... },
   "fill_analysis":  { ... },
-  "reproducibility":{ ... }
+  "reproducibility":{ ... },
+  "arbiter":        { ... }
 }
 ```
 
@@ -367,6 +368,36 @@ That is the strongest argument in this project for putting every order behind a
 deterministic gate: the model is not reproducible even under ideal conditions, and the same
 prompt can move it from reading data to attempting a trade. A replay only re-issues the
 request to the model; it never executes what comes back.
+
+---
+
+## `arbiter`
+
+The third seat (`agent/arbiter.py`, a Featherless model). Consulted only when the Critic
+rejects a trade the Proposer proposed — never on a Critic approval, and never on a Proposer
+skip, because it exists to resolve disagreement and there is none in either case.
+
+| field | type | notes |
+|---|---|---|
+| `consulted` | int | times a genuine disagreement reached it |
+| `unavailable` | int | times it could not be reached at all |
+| `rulings` | object | counts of `proceed` / `abandon` / `deadlock` |
+| `overruled_critic` | int | `proceed` rulings. **Not** a count of orders |
+| `model` | string \| null | most recent model that answered |
+| `authority` / `invoked_when` / `fails_closed` | string | stated in the data, not only in prose |
+| `recent[]` | array | last 25 rulings with rationale, latency and any error |
+| `unavailable_reasons[]` | array | why it could not be reached |
+
+**Its ruling is advisory, and that is enforced in code rather than asserted.** A `proceed`
+ruling does not execute anything — it only declines to end the cycle, and control then falls
+through to the same strategy cross-check and the same `RiskGate.check()` that a Critic
+approval would have reached. There is no path in `multi_agent.py` from a ruling to an order
+tool that skips the gate, which `test_adversarial.py` asserts against the source. So
+`overruled_critic` counts times the council declined to stop early, never times an order
+happened; an order exists only where `gate_decisions` shows an approval.
+
+Every failure mode fails closed. `abandon`, `deadlock`, an unparseable or empty response, a
+timeout, or an absent `FEATHERLESS_API_KEY` all leave the Critic's veto standing.
 
 ---
 
