@@ -9,6 +9,9 @@ Read at session start. Updated at session end.
 - [ ] **ONE SESSION LEFT.** Thu 3 Sep is `LAST_TRADING_DAY`. Entries stop 15:00 ET Thu
       (00:30 IST Fri), flat by 15:45 ET Thu (01:15 IST Fri). Friday the loop refuses to
       trade. The demonstration order must be placed tonight or not at all.
+- [ ] Tell Antigravity: export `schema_version` is now **2** — `reproducibility` renamed to
+      `determinism`, `counterfactual` added.
+- [ ] Run `python main.py --preflight` at 18:50 IST. Currently 11 green / 1 warn / 0 red.
 - [ ] **Set `FEATHERLESS_API_KEY`** or drop the third-seat claim from the submission. The
       arbiter is wired and fails closed, but the council is two models until the key exists.
 - [ ] Antigravity: 3 of 16 arbiter tests need updating — two assert a removed injection
@@ -17,8 +20,11 @@ Read at session start. Updated at session end.
 - [x] Adversarial self-test — 13 attacks, 2 gate holes found and fixed (3 Sep)
 - [x] Fill-gap instrumentation — captures on tonight's fill, unanswered until then (3 Sep)
 - [x] Replay determinism — 5 of 8 divergent at temp 0 / fixed seed / same fingerprint (3 Sep)
-- [ ] **Write the replay result into the submission.** 5/8 divergent under ideal conditions,
-      one flipping a read into an order, is the headline evidence for the risk layer.
+- [ ] **Write the determinism result into the submission.** n=40: 70% divergent (95% CI
+      54.6–81.9%), 19 of 28 changing which tool was called, 0 across a fingerprint change.
+      Now in ARCHITECTURE.md §Decisions and the export's `determinism` section.
+- [ ] **Quote the counterfactual honestly if it is used**: +$1,326.64 over ONE day, marks not
+      results, driven by a +0.44%/+0.23%/+1.18% up session. It prices the gate, not judges it.
 - [x] Supervised unattended loop — `agent/supervisor.py`, verified 3 live cycles pre-open (3 Sep)
 - [x] Alpaca CLI wired as the account/positions read path in the dashboard export (3 Sep)
 

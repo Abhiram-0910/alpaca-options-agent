@@ -21,6 +21,30 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
 
 ## Sessions
 
+### 3 Sep 2026 — counterfactual, determinism at n=40, pre-flight — *Claude Code*
+
+**The counterfactual costs us, and it should be quoted that way**
+- 15 of 21 refused pairs profitable; taking all of them returns **+$1,326.64**.
+- Window is **one** trading day (1 Sep close → 2 Sep close), not three — today had not
+  printed a bar. Every position closed early at mark, so these are marks, not results.
+- SPY +0.44%, QQQ +0.23%, IWM +1.18% over the window. Short premium profits in an up day by
+  construction; the three `long_directional` pairs lost. The number is a function of one
+  session's direction and `underlying_move_pct` ships beside it.
+- It prices the refusal, it cannot judge it: the gate refuses on interval *width*, never on
+  the sign of the latest observation.
+
+**Determinism re-measured at n=40 — this is the entry's central finding**
+- 5 exact, 7 equivalent, **28 divergent = 70% (95% CI 54.6–81.9%, Wilson)**.
+- **19 of 28 divergences changed which tool was called**, not just arguments.
+- 0 across a fingerprint change, 0 failed to replay. n=8's 62.5% sits inside the interval.
+- Now in `ARCHITECTURE.md` §Decisions and the export, out of TODO.md.
+
+**`--preflight`** — 12 real probes, 11 green / 1 warn / 0 red. Run it at 18:50 IST.
+
+**BREAKING for Antigravity: `schema_version` is now 2.** The export's `reproducibility`
+section is renamed **`determinism`** and carries per-replay detail; `counterfactual` is new
+and additive. A reader keyed on `reproducibility` must be updated.
+
 ### 3 Sep 2026 — arbiter wired, council attacked — *Claude Code*
 
 **Done**
