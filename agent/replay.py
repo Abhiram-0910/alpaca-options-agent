@@ -150,16 +150,27 @@ async def replay(did: str) -> dict:
         return {"decision_id": did, "status": "not_found",
                 "detail": f"no call with decision_id {did!r} in {_path()}"}
 
-    if original.get("provider") != "openai":
+    # Route by provider. Both are OpenAI-wire-compatible, so the same client re-issues
+    # either -- what differs is the key and the base URL. Before this, a recorded Featherless
+    # call was "unsupported" and the arbiter could never enter the determinism pool.
+    provider = original.get("provider")
+    if provider == "openai":
+        key, base_url, host = CONFIG.openai_api_key, None, "api.openai.com"
+        key_name = "OPENAI_API_KEY"
+    elif provider == "featherless":
+        from agent.arbiter import ARBITER_BASE_URL
+        key = os.environ.get("FEATHERLESS_API_KEY", "").strip()
+        base_url, host = ARBITER_BASE_URL, "api.featherless.ai"
+        key_name = "FEATHERLESS_API_KEY"
+    else:
         return {"decision_id": did, "status": "unsupported",
-                "detail": f"replay is implemented for the openai path only; this call was "
-                          f"{original.get('provider')!r}"}
-    if not CONFIG.openai_api_key:
+                "detail": f"no replay route for provider {provider!r}"}
+    if not key:
         return {"decision_id": did, "status": "no_credentials",
-                "detail": "OPENAI_API_KEY is not set; cannot re-issue the request"}
+                "detail": f"{key_name} is not set; cannot re-issue the request"}
 
     from openai import AsyncOpenAI
-    client = AsyncOpenAI(api_key=CONFIG.openai_api_key)
+    client = AsyncOpenAI(api_key=key, **({"base_url": base_url} if base_url else {}))
     request = dict(original["request"])
     try:
         fresh = await client.chat.completions.create(**request)
@@ -170,7 +181,8 @@ async def replay(did: str) -> dict:
         return {"decision_id": did, "status": "replay_failed",
                 "detail": f"{type(exc).__name__}: {exc}",
                 "recorded_at": original.get("ts"), "model": original.get("model"),
-                "role": original.get("role"), "temperature": request.get("temperature"),
+                "role": original.get("role"), "provider": provider,
+                "temperature": request.get("temperature"),
                 "seed": request.get("seed"),
                 "system_fingerprint_recorded": original.get("system_fingerprint")}
 
@@ -196,6 +208,8 @@ async def replay(did: str) -> dict:
         "role": original.get("role"),
         "temperature": request.get("temperature"),
         "seed": request.get("seed"),
+        "provider": provider,
+        "provider_host": host,
         "system_fingerprint_recorded": old_fp,
         "system_fingerprint_now": new_fp,
         # A fingerprint change means the backend moved. Even an exact match across one is

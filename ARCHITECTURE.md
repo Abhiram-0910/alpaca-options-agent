@@ -46,8 +46,10 @@ deterministic policy maps it to a concrete trade → RiskGate → MCP order → 
   under which OpenAI's best-effort determinism is supposed to hold — the measured divergence
   rate is in `logs/replay_report.json` and the export's `determinism` section, with a Wilson
   95% interval and a count of how many divergences changed *which tool was called* rather
-  than only its arguments. One divergence flipped `get_option_chain`, a read, into
-  `place_option_order`, an order, on byte-identical inputs.
+  than only its arguments. One divergence replaced four
+  `get_option_contracts` reads with a single `place_option_order` — a research turn became
+  an order attempt on byte-identical inputs (decision `5c11b241404d`; the harness only
+  re-issues the request and never executes what comes back, so nothing was placed).
   **This is why the gate is deterministic Python and not a prompt.** A model that can move
   from reading data to attempting a trade without its inputs changing cannot be the thing
   that decides whether a trade is permitted.
@@ -72,15 +74,37 @@ deterministic policy maps it to a concrete trade → RiskGate → MCP order → 
   *away* from the validated universe, and the more thorough the warning on the tested
   symbols the stronger that push becomes.
 
-  **Timeline, because the exposure and the cause are different things.**
-  On 2 Sep, at the API-default temperature of 1.0, proposals varied: one skip, then MSFT.
-  On 3 Sep at 06:30 temperature was set to 0 with a fixed seed for the determinism work.
-  From 07:43 onward every proposal was byte-identical AAPL, once per 15-minute cycle, for
-  $0.2051 across 14 cycles. **Temperature 0 did not cause this — it exposed it.** At
-  temperature 1.0 the same broken prompt produced 17 rejections on 17 *different*
-  unvalidated symbols, which reads as exploration and is the identical failure wearing
-  better clothes. Determinism is a diagnostic instrument as much as a reproducibility one:
-  the repetition is what made a silent bug legible in thirty seconds of log.
+  **CORRECTED 4 Sep — the first write-up of this finding was wrong, and the correction is
+  the better finding.** It said the proposals were "byte-identical AAPL". They were not.
+  Checking the payloads rather than the summary line:
+
+  | across 22 AAPL proposals | distinct values |
+  |---|---|
+  | OCC option symbols | **19** |
+  | rationales | **22** |
+  | (symbol, strategy) pairs | **2** |
+
+  Only the *ticker and the strategy label* repeated. Everything else varied, and often
+  incoherently: one proposal was a **call** (`AAPL260904C00305000`) labelled
+  `cash_secured_put`; another proposed a **$145 strike** with a rationale citing "strong
+  support around the $325 level". These are not the outputs of a model stuck in a groove.
+
+  So the mechanism is not determinism at all — it is a **prompt-level attractor**. The
+  evidence block warned about the only three symbols that had evidence and said nothing
+  about the other fifteen, so AAPL, first among the unwarned, won every cycle regardless of
+  how much the rest of the output moved. The model was as variable as ever; the funnel it
+  was pouring through had one exit.
+
+  This also dissolves a contradiction we thought we had. A ~70% per-call divergence rate and
+  "17 identical proposals" would have been in real tension. There were never identical
+  proposals, so there is no tension: same-input replays diverge, and different-input cycles
+  converged on one ticker for a reason that has nothing to do with sampling.
+
+  **On temperature:** the earlier claim that "temperature 0 exposed it" does not survive
+  either, because there was no repetition to expose. On 2 Sep at temperature 1.0 the
+  proposals varied (one skip, then MSFT); from 3 Sep at temperature 0 they varied too, and
+  simply kept landing on the same ticker. What made the bug legible was the *ticker* column
+  of the log repeating 22 times, which would have looked the same at any temperature.
 
   **Fixed two ways.** Every watchlist symbol now appears in the evidence block, with
   never-backtested ones marked `NEVER EVALUATED — not tradeable`, and the prompt states the

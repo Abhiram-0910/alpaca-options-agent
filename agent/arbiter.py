@@ -167,16 +167,27 @@ async def arbitrate(
     error: str | None = None
 
     try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
+        request = {
+            "model": model,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            max_tokens=MAX_ARBITER_TOKENS,
-            temperature=0.0,
-        )
+            "max_tokens": MAX_ARBITER_TOKENS,
+            "temperature": 0.0,
+        }
+        response = await client.chat.completions.create(**request)
         raw_text = response.choices[0].message.content or ""
+        # Record the arbiter's call the same way the OpenAI paths are recorded. Without this
+        # the third seat was absent from logs/llm_calls.jsonl entirely, so it was never
+        # replayed and never in the determinism pool -- while our own documents described
+        # that pool as spanning three serving stacks. It spanned two.
+        try:
+            from agent.replay import record_call
+            record_call("featherless", model, request, response, role="arbiter")
+        except Exception:
+            # Instrumentation must never be able to fail a ruling.
+            pass
         parsed = _parse_ruling(raw_text)
         ruling = parsed["ruling"]
         rationale = parsed["rationale"]

@@ -25,6 +25,45 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
 
 ## Sessions
 
+### 4 Sep 2026 — Tier 0 audit: one claim confirmed, two corrected — *Claude Code*
+
+**0.1 CONFIRMED — the harness replays cached values, it does not re-fetch.** `replay()` reads
+the recorded request and re-issues it; it never executes returned tool calls. A recorded
+request carries **108,012 chars** of frozen tool results across 14 tool messages. Proved at
+the network layer: with DNS blocked for every host but the provider, replays complete and the
+only host resolved is the provider's. `verify_replay_isolation.py` makes this runnable by
+anyone. **The dominant confound all five reviewers named is not present.**
+
+**0.2 CORRECTED — two stacks, not three, and the pooled 70% is not quotable.**
+`arbitrate()` never called `record_call`, so Featherless was **never** in the pool. Per-model:
+
+| model | role | n | div | rate | 95% CI |
+|---|---|---|---|---|---|
+| gpt-4o | critic | 3 | 3 | 100.0% | 43.9–100.0% |
+| gpt-4o-mini | proposer | 6 | 5 | 83.3% | 43.6–97.0% |
+| gpt-4o-mini | single_agent | 31 | 20 | 64.5% | 46.9–78.9% |
+
+31 of 40 replays are one model in one role, so "70% across the pipeline" is really
+gpt-4o-mini single-agent. gpt-4o at n=3 must not be quoted.
+
+**0.3 REFUTED — divergence is HIGHEST in the shortest conversations**, the opposite of the
+hypothesis: 0 tool msgs 88.9% (n=9), 4–9 70.0% (n=10), 10+ 61.9% (n=21). CIs overlap, so no
+relationship is established, but nothing supports "near zero in short turns".
+
+**And the premise was wrong: the 22 AAPL proposals were never identical.** 19 distinct OCC
+symbols, 22 distinct rationales, 2 distinct (symbol, strategy) pairs — including a **call**
+labelled `cash_secured_put` and a $145 strike whose rationale cites "support around $325".
+`ARCHITECTURE.md`'s "byte-identical AAPL" was **my error** and is corrected there. There was
+never a contradiction to resolve.
+
+**Sharper candidate finding:** of 28 divergences, 22 were research-only turns; **6 of 6**
+turns containing a decision tool had the decision itself differ (100%, CI 61–100%).
+Underpowered at n=6 — this is what the stratified re-run is for.
+
+**Also fixed:** the read-to-order flip was `get_option_contracts` ×4 → `place_option_order`,
+not `get_option_chain`; corrected in ARCHITECTURE.md. Arbiter calls now record, and `replay()`
+routes by provider so Featherless is replayable (first one: `exact`).
+
 ### 4 Sep 2026 — realised P&L in the export; clock-dependency guard — *Claude Code*
 
 - `order_manager` now records the close: pre-close indicative quote, `position_close_order`
