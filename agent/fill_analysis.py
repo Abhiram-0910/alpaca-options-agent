@@ -146,6 +146,53 @@ def record(order_id: str, snapshot: dict, context: str = None) -> dict:
     return entry
 
 
+def realised_pnl(entries: list) -> dict:
+    """Realised P&L from the signed cash flow of every filled leg.
+
+    No entry/exit pairing is needed, and deliberately so: a sell brings cash in and a buy
+    takes it out, whether the leg is opening or closing, so summing signed cash flows over
+    all filled legs gives the realised result directly and cannot mis-pair a spread.
+
+    Only closed round trips are meaningful here. `legs_open` counts opening fills without a
+    matching close, and while that is non-zero the total is a running figure, not a result.
+    """
+    flows, opened, closed = [], 0, 0
+    for e in entries:
+        for leg in (e.get("legs") or []):
+            price, qty = leg.get("filled_price"), leg.get("filled_qty") or 0
+            if price is None or not qty:
+                continue
+            side = (leg.get("side") or "").lower()
+            if side not in ("buy", "sell"):
+                continue
+            sign = 1.0 if side == "sell" else -1.0
+            flows.append({
+                "symbol": leg.get("symbol"),
+                "side": side,
+                "position_intent": leg.get("position_intent"),
+                "price": price,
+                "qty": qty,
+                "cash": round(sign * float(price) * 100 * float(qty), 2),
+            })
+            intent = (leg.get("position_intent") or "").lower()
+            if intent.endswith("_open"):
+                opened += 1
+            elif intent.endswith("_close"):
+                closed += 1
+    total = round(sum(f["cash"] for f in flows), 2)
+    return {
+        "legs_counted": len(flows),
+        "opening_legs": opened,
+        "closing_legs": closed,
+        "legs_open": max(opened - closed, 0),
+        "round_trip_complete": opened > 0 and opened == closed,
+        "realised_pnl_dollars": total if flows else None,
+        "method": ("signed cash flow over every filled leg: sell is cash in, buy is cash out. "
+                   "Gross of fees -- Alpaca's per-contract fees are not in the fill prices."),
+        "cash_flows": flows,
+    }
+
+
 def demo() -> None:
     """Self-check: the arithmetic, the sign convention, and the unfilled case."""
     class Q:
@@ -185,6 +232,32 @@ def demo() -> None:
          "filled_qty": "0", "status": "canceled"}]})
     assert unfilled[0]["filled_price"] is None and unfilled[0]["delta"] is None, unfilled
     print("unfilled leg -> filled_price null, delta null (no fabricated zero)")
+
+    # Realised P&L: the actual round trip from 3 Sep. Entry sold 1.06 / bought 0.36,
+    # exit bought 0.80 / sold 0.19 -> +$9.00 gross.
+    round_trip = [
+        {"legs": [
+            {"symbol": "A", "side": "sell", "position_intent": "sell_to_open",
+             "filled_price": 1.06, "filled_qty": 1},
+            {"symbol": "B", "side": "buy", "position_intent": "buy_to_open",
+             "filled_price": 0.36, "filled_qty": 1}]},
+        {"legs": [
+            {"symbol": "A", "side": "buy", "position_intent": "buy_to_close",
+             "filled_price": 0.80, "filled_qty": 1},
+            {"symbol": "B", "side": "sell", "position_intent": "sell_to_close",
+             "filled_price": 0.19, "filled_qty": 1}]},
+    ]
+    r = realised_pnl(round_trip)
+    assert r["realised_pnl_dollars"] == 9.0, r
+    assert r["round_trip_complete"] is True and r["legs_open"] == 0, r
+    # Entry only: still a running figure, not a result.
+    half = realised_pnl(round_trip[:1])
+    assert half["realised_pnl_dollars"] == 70.0 and half["legs_open"] == 2, half
+    assert half["round_trip_complete"] is False, half
+    # Nothing filled -> null, never a fabricated zero.
+    assert realised_pnl([])["realised_pnl_dollars"] is None
+    print(f"realised P&L from signed cash flows: entry +$70.00, exit -$61.00, "
+          f"net ${r['realised_pnl_dollars']:+.2f} gross")
     print("fill_analysis: all checks pass")
 
 

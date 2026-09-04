@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
   "meta": {
-    "generated_at": "2026-09-04T01:10:24.747374+00:00",
+    "generated_at": "2026-09-04T01:23:55.292293+00:00",
     "data_feed": "Alpaca Indicative Pricing Feed, not OPRA",
-    "engine_commit": "83332dd",
+    "engine_commit": "aa34f39",
     "paper_trading": true,
     "bootstrap": {
       "method": "percentile bootstrap; circular moving-block where trades overlap",
@@ -33,7 +33,7 @@
     "options_buying_power": 100008.9,
     "open_position_count": 0,
     "account_number": "PA314K6MBKHZ",
-    "timestamp": "2026-09-04T01:10:24.740902+00:00",
+    "timestamp": "2026-09-04T01:23:55.286223+00:00",
     "source": "alpaca-cli",
     "source_version": "0.0.14",
     "error": null
@@ -1402,10 +1402,50 @@
   ],
   "trades": [
     {
+      "ts": "2026-09-03T19:57:19.333296+00:00",
+      "event": "position_closed",
+      "symbol": "SPY260904P00770000",
+      "strategy": null,
+      "exit_reason": "session window: 15:45 ET on the last trading day (2026-09-03) - flat before 08:30 ET nonfarm payrolls, which we cannot manage and cannot exit before the judged mark",
+      "closing": true,
+      "validation_status": null,
+      "legs": [
+        "SPY260904P00770000"
+      ],
+      "entry_credit": null,
+      "limit_price": null,
+      "capital_at_risk": null,
+      "capital_basis": null,
+      "open": false,
+      "current_mark": null,
+      "error": null
+    },
+    {
+      "ts": "2026-09-03T19:57:19.084098+00:00",
+      "event": "position_closed",
+      "symbol": "SPY260904P00765000",
+      "strategy": null,
+      "exit_reason": "session window: 15:45 ET on the last trading day (2026-09-03) - flat before 08:30 ET nonfarm payrolls, which we cannot manage and cannot exit before the judged mark",
+      "closing": true,
+      "validation_status": null,
+      "legs": [
+        "SPY260904P00765000"
+      ],
+      "entry_credit": null,
+      "limit_price": null,
+      "capital_at_risk": null,
+      "capital_basis": null,
+      "open": false,
+      "current_mark": null,
+      "error": null
+    },
+    {
       "ts": "2026-09-03T15:58:51.044685+00:00",
       "event": "demonstration_order",
       "symbol": "SPY",
       "strategy": null,
+      "exit_reason": null,
+      "closing": false,
       "validation_status": "UNVALIDATED_DEMONSTRATION",
       "legs": [
         "SPY260904P00765000",
@@ -1424,6 +1464,8 @@
       "event": "demonstration_order",
       "symbol": "SPY",
       "strategy": null,
+      "exit_reason": null,
+      "closing": false,
       "validation_status": "UNVALIDATED_DEMONSTRATION",
       "legs": [
         "SPY260904P00757000",
@@ -2713,8 +2755,8 @@
     ]
   },
   "fill_analysis": {
-    "orders_measured": 2,
-    "legs_measured": 4,
+    "orders_measured": 3,
+    "legs_measured": 6,
     "legs_filled": 2,
     "mean_delta": -0.02,
     "legs_above_mid": 0,
@@ -2722,6 +2764,49 @@
     "legs_at_mid": 0,
     "delta_sign_convention": "positive = fill printed above the indicative mid we could see",
     "feed": "Alpaca Indicative Pricing Feed, not OPRA",
+    "realised": {
+      "legs_counted": 4,
+      "opening_legs": 2,
+      "closing_legs": 2,
+      "legs_open": 0,
+      "round_trip_complete": true,
+      "realised_pnl_dollars": 9.0,
+      "method": "signed cash flow over every filled leg: sell is cash in, buy is cash out. Gross of fees -- Alpaca's per-contract fees are not in the fill prices.",
+      "cash_flows": [
+        {
+          "symbol": "SPY260904P00765000",
+          "side": "buy",
+          "position_intent": "buy_to_open",
+          "price": 0.36,
+          "qty": 1.0,
+          "cash": -36.0
+        },
+        {
+          "symbol": "SPY260904P00770000",
+          "side": "sell",
+          "position_intent": "sell_to_open",
+          "price": 1.06,
+          "qty": 1.0,
+          "cash": 106.0
+        },
+        {
+          "symbol": "SPY260904P00765000",
+          "side": "sell",
+          "position_intent": "sell_to_close",
+          "price": 0.19,
+          "qty": 1.0,
+          "cash": 19.0
+        },
+        {
+          "symbol": "SPY260904P00770000",
+          "side": "buy",
+          "position_intent": "buy_to_close",
+          "price": 0.8,
+          "qty": 1.0,
+          "cash": -80.0
+        }
+      ]
+    },
     "orders": [
       {
         "ts": "2026-09-03T12:47:02.045714+00:00",
@@ -2808,6 +2893,50 @@
             "delta": -0.025,
             "delta_sign": "below_mid",
             "capture_lag_seconds": 1.149
+          }
+        ]
+      },
+      {
+        "ts": "2026-09-04T01:14:26.347626+00:00",
+        "order_id": "695d8fb4-41ed-4864-8a84-2879005b0acd,42db517a-6ece-4af1-8367-1be0c7dbafeb",
+        "context": "position_close: session window flatten (NFP) \u2014 backfilled from the account",
+        "order_status": "filled",
+        "legs_filled": 2,
+        "error": null,
+        "legs": [
+          {
+            "symbol": "SPY260904P00765000",
+            "side": "sell",
+            "position_intent": "sell_to_close",
+            "indicative_bid": null,
+            "indicative_ask": null,
+            "indicative_mid": null,
+            "quote_captured_at": null,
+            "on_chain": null,
+            "filled_price": 0.19,
+            "filled_qty": 1.0,
+            "filled_at": "2026-09-03T19:57:20.142568683Z",
+            "status": "filled",
+            "delta": null,
+            "delta_sign": null,
+            "capture_lag_seconds": null
+          },
+          {
+            "symbol": "SPY260904P00770000",
+            "side": "buy",
+            "position_intent": "buy_to_close",
+            "indicative_bid": null,
+            "indicative_ask": null,
+            "indicative_mid": null,
+            "quote_captured_at": null,
+            "on_chain": null,
+            "filled_price": 0.8,
+            "filled_qty": 1.0,
+            "filled_at": "2026-09-03T19:57:20.314053521Z",
+            "status": "filled",
+            "delta": null,
+            "delta_sign": null,
+            "capture_lag_seconds": null
           }
         ]
       }
@@ -4755,12 +4884,12 @@
     ]
   },
   "arbiter": {
-    "consulted": 50,
+    "consulted": 102,
     "unavailable": 1,
     "rulings": {
       "proceed": 5,
-      "abandon": 38,
-      "deadlock": 7
+      "abandon": 77,
+      "deadlock": 20
     },
     "overruled_critic": 5,
     "model": "Qwen/Qwen2.5-7B-Instruct",
@@ -4769,251 +4898,251 @@
     "fails_closed": "any ruling other than 'proceed' \u2014 including an unparseable or empty response, a timeout, or an absent API key \u2014 leaves the veto standing",
     "recent": [
       {
-        "ts": "2026-09-03T15:51:19.291420+00:00",
-        "ruling": "abandon",
-        "rationale": "The symbol SPY has no validated strategy; trade it only with extra caution.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 3933,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "naked_call",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T15:52:30.270477+00:00",
-        "ruling": "proceed",
-        "rationale": "The strategy is validated and the position size is acceptable.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 6517,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "vertical_credit_spread_2d",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T15:52:31.512235+00:00",
-        "ruling": "deadlock",
-        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
-        "model": "this-model-does-not-exist/nope-0B",
-        "latency_ms": 551,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": null,
-        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
-      },
-      {
-        "ts": "2026-09-03T15:52:34.413161+00:00",
-        "ruling": "abandon",
-        "rationale": "The symbol SPY has not passed the backtest validation gate, making the strategy unvalidated and subject to extra caution.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 2900,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "vertical_credit_spread_2d",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T15:52:37.325865+00:00",
-        "ruling": "abandon",
-        "rationale": "The symbol SPY is unvalidated, as per the validation evidence provided.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 2911,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "naked_call",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T16:05:33.174190+00:00",
-        "ruling": "abandon",
-        "rationale": "AAPL is unvalidated and no backtest evidence was provided, violating risk management guidelines.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 2575,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T16:21:11.919849+00:00",
-        "ruling": "abandon",
-        "rationale": "AAPL is not listed as a symbol with a validated strategy, and the proposal lacks backtest evidence.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 10223,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T16:36:46.477240+00:00",
-        "ruling": "abandon",
-        "rationale": "The proposal lacks backtest evidence and the strategy for AAPL is not validated.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 5466,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T16:52:24.293899+00:00",
-        "ruling": "abandon",
-        "rationale": "The proposal lacks backtest evidence and AAPL is not a validated symbol, violating the validation process.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 5912,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T17:07:55.144106+00:00",
-        "ruling": "abandon",
-        "rationale": "The proposal lacks backtest evidence for AAPL and relies on subjective market sentiment, which is not sufficient for a validated strategy.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 4493,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T17:23:27.406347+00:00",
-        "ruling": "abandon",
-        "rationale": "The proposal lacks backtest evidence for AAPL, violating the validation requirement.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 5601,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T17:39:01.383009+00:00",
-        "ruling": "abandon",
-        "rationale": "No backtest evidence provided for AAPL, violating the validation requirement.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 2516,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T17:54:35.521893+00:00",
-        "ruling": "abandon",
-        "rationale": "The proposal contains factual errors regarding the strategy and lacks backtest evidence for AAPL.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 4625,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "vertical_credit_spread",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T18:10:08.964380+00:00",
-        "ruling": "abandon",
-        "rationale": "AAPL is unproven and no backtest evidence was provided, violating the validation requirement.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 4654,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T18:25:47.640979+00:00",
-        "ruling": "abandon",
-        "rationale": "AAPL is unproven and no backtest evidence was provided for the cash-secured put strategy.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 8810,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T18:41:25.632896+00:00",
-        "ruling": "abandon",
-        "rationale": "The proposal involves selling cash-secured puts on multiple symbols without any backtest validation evidence for these specific trades, violating the validation requirement.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 4152,
-        "proposal_symbol": null,
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-03T18:57:00.098178+00:00",
-        "ruling": "abandon",
-        "rationale": "The proposal lacks backtest evidence and does not confirm the account's buying power, violating validation requirements.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 6522,
-        "proposal_symbol": "AAPL",
-        "proposal_strategy": "cash_secured_put",
-        "error": null
-      },
-      {
-        "ts": "2026-09-04T01:04:46.070389+00:00",
-        "ruling": "abandon",
-        "rationale": "No validated strategies exist for any symbol; all symbols have failed backtest validation.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 6576,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "vertical_credit_spread_2d",
-        "error": null
-      },
-      {
-        "ts": "2026-09-04T01:04:47.295077+00:00",
-        "ruling": "deadlock",
-        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
-        "model": "this-model-does-not-exist/nope-0B",
-        "latency_ms": 534,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": null,
-        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
-      },
-      {
-        "ts": "2026-09-04T01:04:48.930758+00:00",
-        "ruling": "abandon",
-        "rationale": "The proposal is for an unvalidated strategy on a symbol that has not passed backtest validation.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 1629,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "vertical_credit_spread_2d",
-        "error": null
-      },
-      {
-        "ts": "2026-09-04T01:04:50.687596+00:00",
-        "ruling": "abandon",
-        "rationale": "No tradeable symbols have cleared validation, and SPY has not passed backtest validation.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 1756,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "naked_call",
-        "error": null
-      },
-      {
-        "ts": "2026-09-04T01:05:03.906327+00:00",
-        "ruling": "abandon",
-        "rationale": "No validated strategies exist for any symbol; all symbols have failed backtest validation.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 3207,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "vertical_credit_spread_2d",
-        "error": null
-      },
-      {
-        "ts": "2026-09-04T01:05:05.065287+00:00",
-        "ruling": "deadlock",
-        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
-        "model": "this-model-does-not-exist/nope-0B",
-        "latency_ms": 491,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": null,
-        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
-      },
-      {
-        "ts": "2026-09-04T01:05:07.770836+00:00",
-        "ruling": "abandon",
-        "rationale": "The proposal involves an unvalidated strategy and an untested symbol, which violates the validation gate.",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 2704,
-        "proposal_symbol": "SPY",
-        "proposal_strategy": "vertical_credit_spread_2d",
-        "error": null
-      },
-      {
-        "ts": "2026-09-04T01:05:09.430663+00:00",
+        "ts": "2026-09-04T01:19:59.607467+00:00",
         "ruling": "abandon",
         "rationale": "No tradeable symbols have passed backtest validation.",
         "model": "Qwen/Qwen2.5-7B-Instruct",
-        "latency_ms": 1658,
+        "latency_ms": 6571,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "naked_call",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:20:02.404280+00:00",
+        "ruling": "abandon",
+        "rationale": "No validated strategies exist for any symbol; all symbols have failed backtest validation.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 1825,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:20:03.577160+00:00",
+        "ruling": "deadlock",
+        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "model": "this-model-does-not-exist/nope-0B",
+        "latency_ms": 487,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": null,
+        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
+      },
+      {
+        "ts": "2026-09-04T01:20:05.141373+00:00",
+        "ruling": "abandon",
+        "rationale": "The proposal is for an unvalidated strategy on a symbol that has not passed backtest validation.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 1563,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:20:07.681716+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols have cleared validation, and SPY has not passed the backtest validation gate.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 2539,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "naked_call",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:20:56.121218+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols have cleared validation.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 3383,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:20:57.275058+00:00",
+        "ruling": "deadlock",
+        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "model": "this-model-does-not-exist/nope-0B",
+        "latency_ms": 459,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": null,
+        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
+      },
+      {
+        "ts": "2026-09-04T01:21:00.696247+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols passed validation; the risk gate will refuse the order.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 3419,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:21:02.160351+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols have passed validation, hence the proposal cannot proceed.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 1463,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "naked_call",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:21:06.942023+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols have cleared validation.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 3814,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:21:08.191846+00:00",
+        "ruling": "deadlock",
+        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "model": "this-model-does-not-exist/nope-0B",
+        "latency_ms": 493,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": null,
+        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
+      },
+      {
+        "ts": "2026-09-04T01:21:09.988917+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols passed validation; the risk gate will refuse the order.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 1795,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:21:11.675727+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols have passed validation, hence the proposal cannot proceed.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 1685,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "naked_call",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:22:31.180951+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols have cleared validation.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 4663,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:22:32.356225+00:00",
+        "ruling": "deadlock",
+        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "model": "this-model-does-not-exist/nope-0B",
+        "latency_ms": 479,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": null,
+        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
+      },
+      {
+        "ts": "2026-09-04T01:22:36.231574+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols passed validation; the risk gate will refuse the order.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 3874,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:22:37.678041+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols have passed validation, hence the proposal cannot proceed.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 1445,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "naked_call",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:22:42.257777+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols have cleared validation.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 3604,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:22:43.446359+00:00",
+        "ruling": "deadlock",
+        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "model": "this-model-does-not-exist/nope-0B",
+        "latency_ms": 497,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": null,
+        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
+      },
+      {
+        "ts": "2026-09-04T01:22:47.264888+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols passed validation; the risk gate will refuse the order.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 3817,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:22:48.667277+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols have passed validation, hence the proposal cannot proceed.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 1401,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "naked_call",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:23:30.715356+00:00",
+        "ruling": "abandon",
+        "rationale": "No validated strategies have passed backtest validation for any symbol.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 3942,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:23:31.890547+00:00",
+        "ruling": "deadlock",
+        "rationale": "Arbiter call failed: Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "model": "this-model-does-not-exist/nope-0B",
+        "latency_ms": 487,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": null,
+        "error": "Error code: 404 - {'error': {'message': 'The model `this-model-does-not-exist/nope-0B` does not exist.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}"
+      },
+      {
+        "ts": "2026-09-04T01:23:33.282258+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols passed validation; the risk gate will refuse the order.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 1390,
+        "proposal_symbol": "SPY",
+        "proposal_strategy": "vertical_credit_spread_2d",
+        "error": null
+      },
+      {
+        "ts": "2026-09-04T01:23:34.703750+00:00",
+        "ruling": "abandon",
+        "rationale": "No tradeable symbols have passed backtest validation.",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "latency_ms": 1420,
         "proposal_symbol": "SPY",
         "proposal_strategy": "naked_call",
         "error": null

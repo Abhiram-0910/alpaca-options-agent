@@ -231,6 +231,8 @@ Every order actually placed, newest first. Sourced from `demonstration_order`,
 | `event` | string | which of the three order events this came from |
 | `symbol` | string \| null | |
 | `strategy` | string \| null | `null` on the demonstration path, which has no validated strategy |
+| `closing` | bool | true on a row that closed a position rather than opened one |
+| `exit_reason` | string \| null | why the position was closed — the session-window/NFP reason on a flatten |
 | `validation_status` | string \| null | `UNVALIDATED_DEMONSTRATION` on the demonstration trade. Label it as such wherever it surfaces |
 | `legs` | string[] | OCC contract symbols |
 | `entry_credit` | float \| null | net credit per structure, positive. `null` when the order was a debit or the price was unsigned — Alpaca signs a multi-leg limit price, negative for credit received. A debit is not reported as a credit |
@@ -327,6 +329,14 @@ project is systematically off in a direction we can measure.
 | `delta_sign_convention` | string | positive = the fill printed **above** the indicative mid we could see |
 | `feed` | string | the feed the indicative side came from |
 | `orders[]` | array | per-order records, each with `legs[]` |
+| `realised` | object | realised P&L — see below |
+
+`realised` sums the **signed cash flow of every filled leg**: a sell is cash in, a buy is
+cash out, whether the leg opens or closes. No entry/exit pairing, so it cannot mis-pair a
+spread. `realised_pnl_dollars` is **gross of fees** — Alpaca's per-contract fees are not in
+the fill prices. It is `null` until something fills, and `round_trip_complete` is false while
+`legs_open` is non-zero, in which case the total is a running figure and not a result.
+`cash_flows[]` shows the per-leg arithmetic so the number can be checked by hand.
 
 Each leg carries `indicative_bid` / `indicative_ask` / `indicative_mid`, `quote_captured_at`,
 `on_chain`, `filled_price`, `filled_qty`, `filled_at`, `status`, `delta`, `delta_sign` and

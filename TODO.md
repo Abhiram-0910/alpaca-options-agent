@@ -8,7 +8,8 @@ Read at session start. Updated at session end.
 
 - [x] Demonstration order FILLED 15:58:51 UTC — 770P/765P, 0.70 credit, $430 max loss (3 Sep)
 - [x] Position closed by the loop at 15:45 ET; account flat, +$8.90 realised (4 Sep)
-- [ ] `fill_analysis`/`trades` miss the CLOSING legs — `order_manager.py` never calls
+- [x] `fill_analysis`/`trades` now carry the closing legs and realised P&L (4 Sep)
+- [ ] ~~`fill_analysis`/`trades` miss the CLOSING legs~~ — `order_manager.py` never calls
       `fill_analysis.record()`. The realised P&L is not in the export. ~5 lines if wanted.
 - [ ] ~~Do not touch the position.~~ The loop flattens it at 15:45 ET / 01:15 IST. Verify only.
 - [ ] Feed-vs-fill: write it up as **n=1, no net slippage**, not as a systematic bias. The

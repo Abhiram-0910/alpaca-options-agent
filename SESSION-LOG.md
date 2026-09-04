@@ -25,6 +25,26 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
 
 ## Sessions
 
+### 4 Sep 2026 — realised P&L in the export; clock-dependency guard — *Claude Code*
+
+- `order_manager` now records the close: pre-close indicative quote, `position_close_order`
+  event, and `fill_analysis.record()`. Closes appear in `trades[]` with `closing: true` and
+  the NFP `exit_reason`.
+- `fill_analysis.realised` computes P&L from **signed cash flows** over filled legs — a sell
+  is cash in, a buy is cash out — so no entry/exit pairing can mis-pair a spread.
+  **+$9.00 gross**, +$8.90 after $0.10 fees, `round_trip_complete: true`.
+- Last night's close backfilled from Alpaca's order history, marked `backfilled: true`;
+  indicative fields and deltas are null because no quote was captured then.
+- **`test_no_clock_dependency.py`** runs the whole suite under a mid-session and a
+  post-deadline clock and fails if any result changes.
+
+**The guard was green-always on first write, and I only found that by testing it.** Both
+shims differ by a date string of identical length; written to the same path within one
+filesystem-mtime second, CPython reused the first run's cached `sitecustomize.pyc`, so every
+target silently ran under one clock. Fixed with a fresh temp dir per run and
+`PYTHONDONTWRITEBYTECODE=1`, then re-verified by unpinning a test on purpose and confirming
+the guard fails on it. A guard that cannot fail is worse than no guard.
+
 ### 4 Sep 2026 — session closed out; Proposer loop fixed — *Claude Code*
 
 **Account flat, verified via CLI**: 0 positions, 0 open orders, equity $100,008.90.
@@ -44,7 +64,12 @@ logged, unattended, exactly as built.
 +2.09% on the $430 at risk, over ~4 hours. **One trade on a deliberately unvalidated
 strategy. It is not evidence of edge and must not be written up as one.**
 
-**Export gap, not fixed** — `fill_analysis` and `trades` carry the ENTRY only. The close was
+**Export gap — NOW FIXED (4 Sep).** `order_manager` captures a pre-close quote and calls
+`fill_analysis.record()`; closes appear in `trades[]` with their exit reason; the export
+carries `fill_analysis.realised` = **+$9.00 gross** from signed cash flows, round trip
+complete. Last night's close was backfilled from the account's own order history, marked
+`backfilled: true` with every indicative field null since no quote was captured at the time.
+~~Previously: `fill_analysis` and `trades` carried the ENTRY only.~~ The close was
 placed by `order_manager.py`, which never calls `fill_analysis.record()`, so `legs_filled` is
 2 of 4 and the realised P&L is not in the export at all. Reported rather than fixed.
 

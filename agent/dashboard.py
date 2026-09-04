@@ -31,7 +31,14 @@ DATA_FEED = "Alpaca Indicative Pricing Feed, not OPRA"
 # and a `counterfactual` section added. The rename is the breaking part.
 SCHEMA_VERSION = 2
 
-_ORDER_EVENTS = ("demonstration_order", "multi_agent_order", "deterministic_order")
+_ORDER_EVENTS = ("demonstration_order", "multi_agent_order", "deterministic_order",
+                 # Closing orders are trades too. Without this the dashboard showed every
+                 # position opening and none of them closing, and the exit reason -- which
+                 # for the NFP flatten is the entire point of the record -- appeared nowhere.
+                 "position_close_order",
+                 # Closes logged before position_close_order existed. Carries the symbol and
+                 # the exit reason but no order id or fill price, so those stay null.
+                 "position_closed")
 
 
 def _utcnow() -> str:
@@ -345,6 +352,9 @@ def _trades_section(rows: list, positions: dict) -> list:
         legs = _leg_symbols(payload)
         if not legs and r.get("leg"):
             legs = [r["leg"]]
+        if not legs and r.get("symbol") and r.get("type") in ("position_close_order",
+                                                               "position_closed"):
+            legs = [r["symbol"]]
         # A leg still showing in the account is open; one that has expired or been closed is
         # simply absent, which is why current_mark is null rather than zero.
         marks = {s: positions[s]["current_price"] for s in legs if s in positions}
@@ -353,6 +363,9 @@ def _trades_section(rows: list, positions: dict) -> list:
             "event": r.get("type"),
             "symbol": r.get("symbol") or _order_symbol(payload),
             "strategy": r.get("strategy"),
+            # Present only on a close, and the reason the agent gave for closing.
+            "exit_reason": r.get("reason"),
+            "closing": r.get("type") in ("position_close_order", "position_closed"),
             # Absent on every path except the demonstration one, where it is the whole point.
             "validation_status": r.get("validation_status"),
             "legs": legs,
@@ -441,6 +454,7 @@ def _fill_analysis_section(rows: list) -> dict:
     Indicative Pricing Feed lets us see. `mean_delta` is over filled legs only; with no fills
     yet it is null, and null here means "not yet measurable", never "no difference".
     """
+    from agent.fill_analysis import realised_pnl
     entries = [r for r in rows if r.get("type") == "fill_analysis"]
     legs = [l for e in entries for l in (e.get("legs") or [])]
     filled = [l for l in legs if l.get("delta") is not None]
@@ -455,6 +469,7 @@ def _fill_analysis_section(rows: list) -> dict:
         "legs_at_mid": sum(1 for l in filled if l["delta_sign"] == "at_mid"),
         "delta_sign_convention": "positive = fill printed above the indicative mid we could see",
         "feed": DATA_FEED,
+        "realised": realised_pnl(entries),
         "orders": [{
             "ts": e.get("ts"),
             "order_id": e.get("order_id"),
@@ -714,8 +729,12 @@ if __name__ == "__main__":
              f"{rp['divergence_rate_ci95']['lower']:.0%}-{rp['divergence_rate_ci95']['upper']:.0%})"
              if rp.get("divergence_rate") is not None else ""))
     fa = snap["fill_analysis"]
+    rl = fa["realised"]
     print(f"  fill analysis: {fa['orders_measured']} orders, {fa['legs_filled']}/"
           f"{fa['legs_measured']} legs filled, mean delta {fa['mean_delta']}")
+    print(f"  realised P&L : ${rl['realised_pnl_dollars']} gross "
+          f"({rl['opening_legs']} opening / {rl['closing_legs']} closing legs, "
+          f"round trip complete: {rl['round_trip_complete']})")
     adv = snap["adversarial"]
     print(f"  adversarial: {adv['attacks_run']} attacks, {adv['blocked']} blocked, "
           f"{adv['got_through']} got through, {adv['orders_submitted']} orders submitted")

@@ -28,6 +28,7 @@ from agent.config import CONFIG, assert_paper_trading
 from agent.mcp.client import AlpacaMCPClient
 from agent.risk.gates import parse_occ_symbol
 from agent.trade_log import log_event
+from agent import fill_analysis
 from agent.reflection import record_closed_position
 from agent.alerts import alert
 from agent.mcp_parsers import parse_order_error
@@ -82,6 +83,43 @@ def _close_order_args(symbol: str, side: str, qty: float, current_price: float) 
         "position_intent": "sell_to_close" if is_sell else "buy_to_close",
         "client_order_id": f"close-{symbol}-{date.today().isoformat()}",
     }
+
+
+async def _pre_close_quote(mcp, symbol: str) -> dict:
+    """Indicative bid/ask/mid for one contract, shaped for fill_analysis.compare().
+
+    Returns {} on any failure -- a missing pre-close quote must never stop a close.
+    """
+    try:
+        raw = await mcp.call_tool("get_option_latest_quote", {"symbol_or_symbols": symbol})
+        data = json.loads(raw).get("data") or {}
+        quotes = data.get("quotes") or data
+        q = quotes.get(symbol) if isinstance(quotes, dict) else None
+        if not isinstance(q, dict):
+            return {}
+        bid, ask = q.get("bp"), q.get("ap")
+        mid = None
+        if bid is not None and ask is not None:
+            try:
+                mid = round((float(bid) + float(ask)) / 2, 4)
+            except (TypeError, ValueError):
+                mid = None
+        return {symbol: {
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+            "bid": bid, "ask": ask, "mid": mid,
+            "feed": "Alpaca Indicative Pricing Feed, not OPRA",
+            "on_chain": True,
+        }}
+    except Exception:
+        return {}
+
+
+def _order_id_from(result_text: str):
+    """Alpaca's order id out of an MCP place_option_order response, or None."""
+    try:
+        return (json.loads(result_text).get("data") or {}).get("id")
+    except (ValueError, AttributeError, TypeError):
+        return None
 
 
 async def _manage_positions(mcp) -> list:
@@ -157,6 +195,17 @@ async def _manage_positions(mcp) -> list:
             continue
 
         order_args = _close_order_args(symbol, side, qty, current_price)
+
+        # Indicative quote immediately BEFORE the close, so the exit is measured on the same
+        # footing as the entry. Without this the dashboard showed a position that opened and
+        # never closed: fill_analysis and trades[] only ever saw the demonstration path, and
+        # the realised P&L -- the strongest sequence in the run -- was invisible.
+        #
+        # One extra read on the close path is affordable in a way it would not be on entry:
+        # the exit is already committed by the time we get here, and a quote that fails to
+        # arrive degrades to None rather than blocking the close.
+        quote_snapshot = await _pre_close_quote(mcp, symbol)
+
         result_text = await mcp.call_tool("place_option_order", order_args)
         # Alpaca rejecting an order is a normal (non-error) MCP result, not an exception -- see
         # parse_order_error's docstring. Without this check, a rejected close order was still
@@ -175,7 +224,22 @@ async def _manage_positions(mcp) -> list:
         # not a confirmed fill price — close enough for a limit order sized off current_price,
         # and simpler than tracking async fills; disclosed as an approximation, not exact.
         record_closed_position(symbol, exit_reason=reason, plpc=round(plpc, 4))
-        closed.append({"symbol": symbol, "reason": reason, "plpc": round(plpc, 4)})
+
+        # The closing order as a trade row in its own right, carrying the reason it was
+        # closed -- for the NFP flatten that reason is the whole point of the record.
+        close_order_id = _order_id_from(result_text)
+        log_event("position_close_order", symbol=symbol, reason=reason, dte=dte,
+                  plpc=round(plpc, 4), side=order_args.get("side"),
+                  position_intent=order_args.get("position_intent"),
+                  limit_price=order_args.get("limit_price"), qty=order_args.get("qty"),
+                  order_id=close_order_id, result=result_text[:800])
+        if close_order_id:
+            # Never allowed to affect the close: record() swallows its own errors, and this
+            # runs after Alpaca has already accepted the order.
+            fill_analysis.record(close_order_id, quote_snapshot or {},
+                                 context=f"position_close: {reason}")
+        closed.append({"symbol": symbol, "reason": reason, "plpc": round(plpc, 4),
+                       "order_id": close_order_id})
 
     return closed
 
