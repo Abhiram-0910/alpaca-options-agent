@@ -29,6 +29,18 @@ def _leg(strike, side, ratio="1", **kw):
     return {"symbol": _occ(strike, **kw), "side": side, "ratio_qty": ratio}
 
 
+# The gate consults session_window on the wall clock, and this repo's window closed at
+# 15:45 ET on 3 Sep 2026. After that instant every gate check is refused with "no new
+# positions" BEFORE it reaches the layer under test, so these assertions started failing on
+# 4 Sep for a reason that has nothing to do with the code. Pin the clock to a moment inside
+# the trading window: the rule itself is unmodified and is covered by
+# agent/session_window.py's own self-check.
+import agent.session_window as _sw
+from datetime import datetime as _dt
+from zoneinfo import ZoneInfo as _Z
+_sw._now_et = lambda: _dt(2026, 9, 3, 11, 0, tzinfo=_Z("America/New_York"))
+
+
 def demo() -> None:
     # 1. Every attack is a payload, and no attack carries a live order path. The harness
     #    calls RiskGate.check and stops; nothing here can reach Alpaca.

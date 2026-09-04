@@ -29,7 +29,7 @@ from agent.kill_switch import assert_not_killed
 from agent.alerts import alert
 from agent.llm_cost import call_cost
 from agent.openai_cost import call_cost as openai_call_cost
-from agent.backtest_evidence import load_backtest_summary, load_cleared_strategies
+from agent.backtest_evidence import load_backtest_summary, load_cleared_strategies, load_cleared_symbols
 from agent.mcp_parsers import parse_order_error, clip_tool_result
 from agent.reflection import summarize_for_prompt
 from agent.live_agent import STRATEGY_UNIVERSE
@@ -124,8 +124,11 @@ Watchlist (only research these underlyings): {', '.join(CONFIG.watchlist)}
 
 {STRATEGY_UNIVERSE}
 
-Backtest validation results per symbol — strongly prefer strategies marked PASSED; a symbol with
-no PASSED strategy should generally be skipped rather than traded on discretion alone:
+Backtest validation results for EVERY symbol in the watchlist. Only a strategy marked PASSED is
+tradeable. TESTED, NOTHING PASSED and NEVER EVALUATED both mean the deterministic risk gate will
+refuse the order — no rationale, however well argued, changes that. If no symbol shows PASSED,
+the correct and expected output is propose_trade with action="skip"; proposing a trade anyway is
+a wrong answer, not a bold one:
 {backtest_summary}
 {reflection_section}
 Work through this cycle methodically:
@@ -415,6 +418,25 @@ async def run_cycle(provider: str = "openai") -> dict:
         read_only_tools = [t for t in all_tools if t["name"] not in ORDER_TOOLS] + [PROPOSE_TRADE_TOOL]
         log_event("multi_agent_cycle_start", provider=provider, models=models,
                   order_tools_withheld=sorted(ORDER_TOOLS))
+
+        # Deterministic short-circuit. When validation is required and nothing has cleared,
+        # the set of proposals the gate can approve is empty and every cycle is a search over
+        # a space known in advance to be empty. Seventeen consecutive cycles proved that at
+        # roughly $0.015 each. Python already knows the answer, so it gives it rather than
+        # paying a model to rediscover it -- and the skip is logged as a structured decision
+        # with its reason, which is a stronger artifact than a rejected proposal.
+        if CONFIG.require_backtest_validation and not load_cleared_symbols():
+            reason = ("no symbol in the watchlist has a strategy that passed backtest "
+                      "validation, so no proposal could be approved by the risk gate")
+            proposal = {"action": "skip", "rationale": reason}
+            log_event("no_validated_universe", reason=reason,
+                      watchlist=list(CONFIG.watchlist), cleared_symbols=[],
+                      llm_calls_skipped=True)
+            log_event("proposal", proposal=proposal)
+            log_event("multi_agent_cycle_complete", proposal=proposal, verdict=None,
+                       cost_usd=0.0)
+            return {"tool_calls": 0, "api_calls": 0, "cost_usd": 0.0, "rejections": [],
+                    "summary": f"Skipped without calling any model: {reason}."}
 
         proposer_result = await run_proposer(client, mcp, read_only_tools,
                                               _proposer_system_prompt(backtest_summary, reflection_summary))

@@ -48,6 +48,18 @@ async def _noop():
     return 0.0
 
 
+# The gate consults session_window on the wall clock, and this repo's window closed at
+# 15:45 ET on 3 Sep 2026. After that instant every gate check is refused with "no new
+# positions" BEFORE it reaches the layer under test, so these assertions started failing on
+# 4 Sep for a reason that has nothing to do with the code. Pin the clock to a moment inside
+# the trading window: the rule itself is unmodified and is covered by
+# agent/session_window.py's own self-check.
+import agent.session_window as _sw
+from datetime import datetime as _dt
+from zoneinfo import ZoneInfo as _Z
+_sw._now_et = lambda: _dt(2026, 9, 3, 11, 0, tzinfo=_Z("America/New_York"))
+
+
 def demo() -> None:
     # 1. A heartbeat on every pass, including passes that do nothing. This is what makes an
     #    empty stretch provably a decision rather than a switched-off agent.

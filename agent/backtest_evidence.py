@@ -63,7 +63,31 @@ def load_backtest_summary() -> str:
                               f"(sharpe={m['sharpe']}, win_rate={m['win_rate']:.0%}, "
                               f"mean_return={m['mean_return_pct']:.2%}, trades={m['trades']})")
         else:
-            lines.append(f"  {sym}: no strategy passed the backtest validation gate — "
-                          f"treat this symbol as unproven, trade it only with extra caution "
-                          f"(if at all) and say so explicitly in your rationale")
-    return "\n".join(lines) if lines else "  (no backtest report found — run run_backtest.py first)"
+            lines.append(f"  {sym}: TESTED, NOTHING PASSED — no strategy cleared the backtest "
+                          f"validation gate. The risk gate will refuse an order on this symbol.")
+
+    # Every watchlist symbol that was never backtested at all gets an explicit line.
+    #
+    # This is the whole bug. The summary used to list only the symbols that HAD been tested,
+    # each carrying a warning -- so the three symbols with evidence were the only three the
+    # Proposer was warned about, and the fifteen with no evidence carried no signal at all.
+    # The model read absence-of-mention as absence-of-objection and proposed AAPL, the first
+    # unmentioned name in the watchlist, seventeen times running. An evidence block that
+    # steers away from the validated universe is worse than no evidence block.
+    tested = set(backtest_report)
+    untested = [s for s in CONFIG.watchlist if s not in tested]
+    for sym in untested:
+        lines.append(f"  {sym}: NEVER EVALUATED — no backtest was run on this symbol. It is "
+                      f"not tradeable. The risk gate will refuse an order on it.")
+
+    if not lines:
+        return "  (no backtest report found — run run_backtest.py first)"
+
+    cleared_any = any("PASSED validation" in ln for ln in lines)
+    if not cleared_any:
+        lines.append("")
+        lines.append("  NOTHING IN THE WATCHLIST HAS CLEARED VALIDATION. There is no tradeable "
+                      "symbol this cycle. The correct output is propose_trade with "
+                      "action=\"skip\" — a proposal to trade any symbol above will be refused "
+                      "by the deterministic risk gate whatever its rationale says.")
+    return "\n".join(lines)

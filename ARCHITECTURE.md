@@ -54,6 +54,50 @@ deterministic policy maps it to a concrete trade → RiskGate → MCP order → 
   **Rejected:** claiming reproducibility because temperature is 0. Before this work,
   temperature and seed were not even set — the runs were not merely non-reproducible, they
   were not attempting to be.
+- **An evidence block that steers away from its own validated universe** — kept as a finding,
+  because it is the most instructive failure in this build and it never once looked like one.
+
+  The Proposer proposed a cash-secured put on AAPL **17 consecutive times** and was rejected
+  17 consecutive times for the same reason: AAPL never passed validation. Every layer below
+  it behaved perfectly — the Critic vetoed each time on correct grounds, the arbiter upheld
+  each veto, the risk gate would have refused anyway, nothing reached the account. The
+  pipeline looked like it was working. It was looping.
+
+  **Cause: the evidence block only listed the symbols that had been backtested.** SPY, QQQ
+  and IWM each carried an explicit "no strategy passed" warning. The other 15 watchlist
+  symbols were absent entirely, so they carried no signal at all. The model read
+  absence-of-mention as absence-of-objection and picked AAPL, the first unmentioned name in
+  the watchlist. The three symbols with evidence were the only three it was warned about.
+  A prompt that presents evidence this way does not merely fail to steer — it steers
+  *away* from the validated universe, and the more thorough the warning on the tested
+  symbols the stronger that push becomes.
+
+  **Timeline, because the exposure and the cause are different things.**
+  On 2 Sep, at the API-default temperature of 1.0, proposals varied: one skip, then MSFT.
+  On 3 Sep at 06:30 temperature was set to 0 with a fixed seed for the determinism work.
+  From 07:43 onward every proposal was byte-identical AAPL, once per 15-minute cycle, for
+  $0.2051 across 14 cycles. **Temperature 0 did not cause this — it exposed it.** At
+  temperature 1.0 the same broken prompt produced 17 rejections on 17 *different*
+  unvalidated symbols, which reads as exploration and is the identical failure wearing
+  better clothes. Determinism is a diagnostic instrument as much as a reproducibility one:
+  the repetition is what made a silent bug legible in thirty seconds of log.
+
+  **Fixed two ways.** Every watchlist symbol now appears in the evidence block, with
+  never-backtested ones marked `NEVER EVALUATED — not tradeable`, and the prompt states the
+  operational rule instead of hedging it ("if no symbol shows PASSED, the correct output is
+  `action=skip`"). And `run_cycle` now short-circuits: when validation is required and
+  nothing has cleared, the set of approvable proposals is empty, so it logs a structured
+  `no_validated_universe` decision and returns without calling a model at all — 0 tool
+  calls, 0 API calls, $0.00.
+
+  **Rejected:** feeding the Critic's rejection reasons back to the Proposer as memory. The
+  Critic judges *rationale quality* and reads prose, so that gradient teaches the model to
+  phrase its way past the reviewer rather than to propose better trades. The risk gate is
+  deterministic and would still refuse, so the cost would never show up as money — it would
+  show up as a Critic-approved proposal on an unvalidated symbol sitting in the audit trail,
+  which is the more expensive currency here. Also rejected: raising temperature to restore
+  variety, which buys different wrong answers and forfeits the determinism measurement.
+
 - **The gate is priced, not just defended** — `agent/counterfactual.py` re-runs every refused
   strategy through the same simulator that refused it, so the refusal has a dollar figure
   attached instead of only a rationale. It is reported whichever way it comes out. A short
