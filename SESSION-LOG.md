@@ -6,6 +6,10 @@ Updated at the end of every session, read at the start. Newest entry at the top.
 
 ## Current state
 
+**SESSION COMPLETE — account flat, +$8.90 realised.** 49+ loop cycles, $0.2969 spend.
+Demonstration spread entered 0.70 credit, closed 0.61 debit, **+$9.00 gross / +$8.90 net**
+of $0.10 fees. One trade, explicitly unvalidated — not evidence of edge. See §Variance.
+
 **Updated:** 2 Sep 2026, 16:00 IST
 **Branch:** main
 **Agents active:** Claude Code (code), Antigravity (dashboard, separate worktree),
@@ -20,6 +24,37 @@ $430, gate-approved, **not submitted**.
 in-session. Then submission materials, which remain entirely undone with ~44 hours left.
 
 ## Sessions
+
+### 4 Sep 2026 — session closed out; Proposer loop fixed — *Claude Code*
+
+**Account flat, verified via CLI**: 0 positions, 0 open orders, equity $100,008.90.
+The loop blocked entries at 15:00 ET and closed both legs at 15:45 ET with the NFP reason
+logged, unattended, exactly as built.
+
+**Realised P&L**
+
+| | |
+|---|---|
+| entry | sold 770P 1.06, bought 765P 0.36 → **+$70.00** credit |
+| close | bought 770P 0.80, sold 765P 0.19 → **−$61.00** debit |
+| gross | **+$9.00** |
+| fees | −$0.10 |
+| **net** | **+$8.90** — a gain |
+
++2.09% on the $430 at risk, over ~4 hours. **One trade on a deliberately unvalidated
+strategy. It is not evidence of edge and must not be written up as one.**
+
+**Export gap, not fixed** — `fill_analysis` and `trades` carry the ENTRY only. The close was
+placed by `order_manager.py`, which never calls `fill_analysis.record()`, so `legs_filled` is
+2 of 4 and the realised P&L is not in the export at all. Reported rather than fixed.
+
+**Proposer fix applied** — evidence block now covers all 18 watchlist symbols, prompt states
+the skip rule, and `run_cycle` short-circuits to a structured `no_validated_universe`
+decision when nothing has cleared. Verified 0 tool calls / 0 API calls / $0.0000.
+The 17-proposal loop is preserved in ARCHITECTURE.md §Decisions as a finding.
+
+**Three tests were failing on wall clock**, not on any code change: they assert on gate
+rejection reasons that the closed session window now pre-empts. Clocks pinned.
 
 ### 3 Sep 2026 — demonstration filled; first feed-vs-fill measurement — *Claude Code*
 
