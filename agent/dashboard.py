@@ -485,6 +485,70 @@ def _fill_analysis_section(rows: list) -> dict:
 # --- reproducibility -------------------------------------------------------
 
 def _determinism_section(logs: str) -> dict:
+    """Stratified measurement supersedes the pooled one where available."""
+    strat = _read_json(os.path.join(logs, "replay_stratified.json"))
+    if isinstance(strat, dict) and strat.get("cells"):
+        return _determinism_stratified(strat)
+    return _determinism_pooled(logs)
+
+
+def _determinism_stratified(rep: dict) -> dict:
+    """Per-cell divergence. There is deliberately no single headline number.
+
+    The previous section reported one pooled figure across every call. That was wrong twice
+    over: 31 of 40 replays were a single model in a single role, and the cells turn out to
+    span 0% to 98%, so no one number describes the system. Cells, quotability and per-cell
+    measures were fixed in agent/replay.py CELL_RULES before the run.
+    """
+    cells = []
+    for c in rep["cells"]:
+        cells.append({
+            "cell": f"{c['provider']}/{c['model']}/{c['role']}",
+            "provider": c["provider"], "model": c["model"], "role": c["role"],
+            "n": c["replays_counted"],
+            "unique_decisions": c["unique_decisions"],
+            "repeats_per_decision": c["repeats_per_decision"],
+            "exact": c["exact"], "equivalent": c["equivalent"], "divergent": c["divergent"],
+            "divergence_rate": c["divergence_rate"],
+            "divergence_rate_ci95": c["divergence_rate_ci95"],
+            # False where the responder emits no tool calls at all: "divergent" is then
+            # unreachable by construction and the rate above must not be read as determinism.
+            "divergence_rate_meaningful": c.get("divergence_rate_meaningful", True),
+            "wording_changed": c.get("wording_changed"),
+            "wording_changed_rate": c.get("wording_changed_rate"),
+            "decision_turns": c["decision_turns"],
+            "decision_changed": c["decision_changed"],
+            "decision_changed_rate": c["decision_changed_rate"],
+            "decision_changed_ci95": c["decision_changed_ci95"],
+            "ruling_turns": c.get("ruling_turns"),
+            "ruling_changed": c.get("ruling_changed"),
+            "ruling_changed_rate": c.get("ruling_changed_rate"),
+            "ruling_changed_ci95": c.get("ruling_changed_ci95"),
+            "primary_measure": c["primary_measure"],
+            "quotable": c["quotable"],
+            "caveat": c["caveat"],
+            "across_fingerprint_change": c["across_fingerprint_change"],
+            "failed_to_replay": c["failed_to_replay"],
+        })
+    return {
+        "design": "stratified by (provider, model, role)",
+        "n_per_cell": rep.get("n_per_cell"),
+        "pre_registered": rep.get("pre_registered"),
+        "conditions": rep.get("conditions"),
+        "measured_at": rep.get("generated_at"),
+        "headline": rep.get("headline"),
+        "pooled_rate": None,
+        "pooled_rate_withheld_because": (
+            "cells span 0% to 98% divergence, so no single figure describes the system. The "
+            "critic runs with tool_choice forced and must not be pooled with a free-choice "
+            "cell; the arbiter emits JSON text rather than tool calls and is measured "
+            "separately. An earlier 70% pooled figure was 78% one cell and is superseded."),
+        "supersedes": "the pooled 40-replay measurement reported before 4 Sep 2026",
+        "cells": cells,
+    }
+
+
+def _determinism_pooled(logs: str) -> dict:
     """What replaying past decisions actually showed.
 
     Of the 77 agentic-trading studies audited in the 2026 literature, none reached the top
@@ -723,11 +787,18 @@ if __name__ == "__main__":
     print(f"  arbiter: consulted {ab['consulted']}, unavailable {ab['unavailable']}, "
           f"rulings {ab['rulings']}")
     rp = snap["determinism"]
-    print(f"  determinism: {rp['calls_recorded']} calls recorded; {rp['replays']} replays "
-          f"-> {rp['exact']} exact / {rp['equivalent']} equivalent / {rp['divergent']} divergent"
-          + (f" ({rp['divergence_rate']:.0%}, CI "
-             f"{rp['divergence_rate_ci95']['lower']:.0%}-{rp['divergence_rate_ci95']['upper']:.0%})"
-             if rp.get("divergence_rate") is not None else ""))
+    if rp.get("design"):
+        print("  determinism: stratified, per cell (pooled figure deliberately withheld)")
+        for c in rp["cells"]:
+            dm = "" if c["divergence_rate_meaningful"] else "  [rate meaningless: no tool calls]"
+            q = "" if c["quotable"] else "  [not quotable]"
+            print(f"      {c['cell']:44s} n={c['n']:>3} div={c['divergence_rate']:>6.1%}{dm}{q}")
+    else:
+        print(f"  determinism: {rp['calls_recorded']} calls recorded; {rp['replays']} replays "
+              f"-> {rp['exact']} exact / {rp['equivalent']} equivalent / {rp['divergent']} divergent"
+              + (f" ({rp['divergence_rate']:.0%}, CI "
+                 f"{rp['divergence_rate_ci95']['lower']:.0%}-{rp['divergence_rate_ci95']['upper']:.0%})"
+                 if rp.get("divergence_rate") is not None else ""))
     fa = snap["fill_analysis"]
     rl = fa["realised"]
     print(f"  fill analysis: {fa['orders_measured']} orders, {fa['legs_filled']}/"

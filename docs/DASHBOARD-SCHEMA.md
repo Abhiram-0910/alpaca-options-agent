@@ -355,7 +355,34 @@ fabricated, and an unfilled leg is not averaged into `mean_delta` as though it f
 
 ## `determinism`
 
-What replaying past decisions actually showed. **Was `reproducibility` in schema_version 1.** Written from `logs/llm_calls.jsonl` (every
+What replaying past decisions actually showed. **Was `reproducibility` in schema_version 1.**
+
+**As of 4 Sep this section is STRATIFIED and has no pooled rate.** When
+`logs/replay_stratified.json` exists the section carries `design`, `cells[]` and
+`pooled_rate: null` with `pooled_rate_withheld_because` explaining why; the older pooled
+shape below is the fallback for exports predating that run.
+
+| field | notes |
+|---|---|
+| `design` | `"stratified by (provider, model, role)"` |
+| `n_per_cell` / `pre_registered` / `conditions` | cells and quotability were fixed in code before the run |
+| `headline` | decision-tool rate **per cell**, never pooled |
+| `pooled_rate` | always `null` — see `pooled_rate_withheld_because` |
+| `supersedes` | names the measurement this replaces |
+| `cells[]` | one row per (provider, model, role) |
+
+Each cell carries `n`, `unique_decisions`, `repeats_per_decision`, `exact`/`equivalent`/
+`divergent`, `divergence_rate` + CI, `decision_turns`/`decision_changed` + CI,
+`ruling_turns`/`ruling_changed` + CI, `primary_measure`, `quotable`, `caveat`, and:
+
+- **`divergence_rate_meaningful`** — `false` where the responder emits no tool calls at all.
+  "Divergent" requires differing tool calls, so it is unreachable by construction there and
+  the 0.0% must **not** be read as determinism. The arbiter is such a cell; its real measures
+  are `ruling_changed` and `wording_changed`.
+- **`quotable`** — `false` means the cell answers a narrow question only. Do not quote it as
+  a model comparison.
+- **`caveat`** — carry it wherever the cell's number appears. The critic's forced
+  `tool_choice` caveat in particular: its rate must never be pooled with a free-choice cell. Written from `logs/llm_calls.jsonl` (every
 LLM call recorded whole) and `logs/replay_report.json` (`python main.py --replay all`).
 
 | field | type | notes |

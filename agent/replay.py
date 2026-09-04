@@ -313,6 +313,208 @@ async def replay_many(limit: int = 5, path: str = None, repeats: int = 1) -> dic
     return report
 
 
+# --- stratified measurement --------------------------------------------------
+
+# Turns where the model is DECIDING rather than researching. A divergence here changes what
+# the system would do; a divergence in a read changes only how it got there.
+DECISION_TOOLS = {"propose_trade", "review_decision"}
+
+# Per-cell analysis rules, fixed BEFORE the run so nothing is chosen after seeing results.
+CELL_RULES = {
+    ("openai", "gpt-4o-mini", "proposer"): {
+        "quotable": True, "caveat": None, "measure": "decision_changed"},
+    ("openai", "gpt-4o", "critic"): {
+        "quotable": True, "measure": "decision_changed",
+        "caveat": ("tool_choice is FORCED to review_decision, so this cell's output space is "
+                   "constrained by construction. Its rate is not comparable to a free-choice "
+                   "turn and must never be pooled with one.")},
+    ("openai", "gpt-4o-mini", "single_agent"): {
+        "quotable": True, "measure": "decision_changed",
+        "caveat": ("11 unique decisions replayed ~5.5x each: this measures same-input "
+                   "determinism, not conversation diversity.")},
+    ("featherless", "Qwen/Qwen2.5-7B-Instruct", "arbiter"): {
+        "quotable": False, "measure": "ruling_changed",
+        "caveat": ("only 4 unique decisions at ~15x repeats, and the arbiter emits JSON text "
+                   "rather than a tool call. This answers 'is Featherless deterministic on a "
+                   "fixed input' and is NOT a model comparison.")},
+}
+
+
+def _decision_calls(calls: list) -> list:
+    return [(n, a) for n, a in calls if n in DECISION_TOOLS]
+
+
+def _spacing_for(avg_input_tokens: float) -> float:
+    """Seconds between replays so a cell stays under a 200k tokens-per-minute ceiling.
+
+    Each replay re-sends the whole recorded conversation, so a 57k-token single-agent turn
+    permits only ~3.5 replays a minute. Pacing by the cell's own size beats one global sleep:
+    the critic's 1k-token turns would otherwise wait as long as the largest cell.
+    """
+    if avg_input_tokens <= 0:
+        return 2.0
+    per_minute = max(1.0, 180_000 / avg_input_tokens)   # 180k, not 200k, leaves headroom
+    return max(2.0, 60.0 / per_minute)
+
+
+async def replay_stratified(n_per_cell: int = 60, path: str = None) -> dict:
+    """Replay n_per_cell times in each (provider, model, role) cell and report per cell.
+
+    Pooling across cells was the flaw in the previous measurement: 31 of 40 replays were one
+    model in one role, so a single figure described that cell and was presented as the
+    pipeline. This fixes the sampling rather than the presentation.
+    """
+    path = path or os.path.join(CONFIG.logs_dir, "replay_stratified.json")
+    calls = load_calls()
+
+    cells = {}
+    for c in calls:
+        key = (c.get("provider"), c.get("model"), c.get("role"))
+        cell = cells.setdefault(key, {"ids": [], "in_tok": []})
+        if c["decision_id"] not in cell["ids"]:
+            cell["ids"].append(c["decision_id"])
+        u = (c.get("response") or {}).get("usage") or {}
+        if u.get("prompt_tokens"):
+            cell["in_tok"].append(u["prompt_tokens"])
+
+    out_cells = []
+    for key, inv in sorted(cells.items(), key=lambda kv: str(kv[0])):
+        provider, model, role = key
+        ids = inv["ids"]
+        if not ids:
+            continue
+        avg_in = sum(inv["in_tok"]) / len(inv["in_tok"]) if inv["in_tok"] else 0
+        spacing = _spacing_for(avg_in)
+        rules = CELL_RULES.get(key, {"quotable": False, "measure": "decision_changed",
+                                     "caveat": "no pre-registered rule for this cell"})
+        print(f"\n[{provider}/{model}/{role}] {n_per_cell} replays over {len(ids)} unique "
+              f"decisions, {spacing:.0f}s spacing, avg {avg_in:,.0f} input tokens")
+
+        results = []
+        for i in range(n_per_cell):
+            if i:
+                await asyncio.sleep(spacing)
+            did = ids[i % len(ids)]
+            r = await replay(did)
+            if r["status"] == "replay_failed" and "RateLimit" in (r.get("detail") or ""):
+                await asyncio.sleep(spacing * 2)
+                r = await replay(did)
+            results.append(r)
+            if (i + 1) % 10 == 0:
+                done = [x for x in results if x["status"] in ("exact", "equivalent", "divergent")]
+                dv = sum(1 for x in done if x["status"] == "divergent")
+                print(f"    {i+1}/{n_per_cell}  counted={len(done)} divergent={dv}", flush=True)
+
+        counted = [r for r in results if r["status"] in ("exact", "equivalent", "divergent")]
+        div = [r for r in counted if r["status"] == "divergent"]
+        lo, hi = _wilson(len(div), len(counted))
+
+        # Decision-tool subset: turns where the model was actually deciding.
+        dec_turns, dec_changed = [], []
+        for r in counted:
+            old_d = _decision_calls(r.get("recorded_tool_calls") or [])
+            new_d = _decision_calls(r.get("replayed_tool_calls") or [])
+            if old_d or new_d:
+                dec_turns.append(r)
+                if old_d != new_d:
+                    dec_changed.append(r)
+        dlo, dhi = _wilson(len(dec_changed), len(dec_turns))
+
+        # Arbiter: the ruling is JSON text, not a tool call, so it needs its own measure.
+        rul_turns, rul_changed = [], []
+        if rules["measure"] == "ruling_changed":
+            from agent.arbiter import _parse_ruling
+            for r in counted:
+                a = _parse_ruling(r.get("recorded_text") or "")["ruling"]
+                b = _parse_ruling(r.get("replayed_text") or "")["ruling"]
+                rul_turns.append(r)
+                if a != b:
+                    rul_changed.append(r)
+        rlo, rhi = _wilson(len(rul_changed), len(rul_turns))
+
+        out_cells.append({
+            "provider": provider, "model": model, "role": role,
+            "unique_decisions": len(ids),
+            "repeats_per_decision": round(n_per_cell / len(ids), 2),
+            "avg_input_tokens": round(avg_in),
+            "replays_attempted": n_per_cell,
+            "replays_counted": len(counted),
+            "failed_to_replay": len(results) - len(counted),
+            "exact": sum(1 for r in counted if r["status"] == "exact"),
+            "equivalent": sum(1 for r in counted if r["status"] == "equivalent"),
+            "divergent": len(div),
+            "divergence_rate": round(len(div) / len(counted), 4) if counted else None,
+            "divergence_rate_ci95": {"lower": lo, "upper": hi, "method": "Wilson score"},
+            "decision_turns": len(dec_turns),
+            "decision_changed": len(dec_changed),
+            "decision_changed_rate": (round(len(dec_changed) / len(dec_turns), 4)
+                                       if dec_turns else None),
+            "decision_changed_ci95": {"lower": dlo, "upper": dhi, "method": "Wilson score"},
+            "ruling_turns": len(rul_turns) or None,
+            "ruling_changed": len(rul_changed) if rul_turns else None,
+            "ruling_changed_rate": (round(len(rul_changed) / len(rul_turns), 4)
+                                     if rul_turns else None),
+            "ruling_changed_ci95": ({"lower": rlo, "upper": rhi, "method": "Wilson score"}
+                                     if rul_turns else None),
+            # "divergent" requires the tool calls to differ. A responder that emits no tool
+            # calls can never reach it, so divergence_rate is meaningless for the arbiter and
+            # the honest measures are ruling_changed and wording_changed.
+            "divergence_rate_meaningful": bool(
+                any((r.get("recorded_tool_calls") or r.get("replayed_tool_calls"))
+                    for r in counted)),
+            "wording_changed": sum(1 for r in counted if r["status"] == "equivalent"),
+            "wording_changed_rate": (round(
+                sum(1 for r in counted if r["status"] == "equivalent") / len(counted), 4)
+                if counted else None),
+            "primary_measure": rules["measure"],
+            "quotable": rules["quotable"],
+            "caveat": rules["caveat"],
+            "across_fingerprint_change": sum(1 for r in counted if r.get("fingerprint_changed")),
+            "results": [{k: v for k, v in r.items()
+                          if k not in ("recorded_text", "replayed_text")} for r in results],
+        })
+
+    # Decision-tool rate across the cells whose measure is decision_changed. This is the
+    # headline: it is a like-for-like question asked of every free-choice cell.
+    # Reported PER CELL, never pooled. The first version of this summed the critic and the
+    # proposer into one 99/100 figure -- and the critic runs with tool_choice forced, so that
+    # pooled a constrained cell with a free-choice one, which is exactly what the
+    # pre-registration forbade. Caught before publication; the pooled field is gone rather
+    # than kept with a footnote.
+    dec_cells = [c for c in out_cells if c["primary_measure"] == "decision_changed"
+                 and c["decision_turns"]]
+
+    report = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "n_per_cell": n_per_cell,
+        "pre_registered": ("cells, quotability and per-cell measures were fixed in "
+                           "agent/replay.py CELL_RULES before this run was executed"),
+        "conditions": "temperature 0, fixed seed where the provider supports one, same model",
+        "headline": {
+            "metric": "decision-tool divergence: did the DECISION change on replay",
+            "reported": "per cell only — see note",
+            "note": ("NOT pooled. The critic runs with tool_choice forced, so its output space "
+                      "is constrained by construction and its rate is not comparable to a "
+                      "free-choice turn. The arbiter emits JSON text rather than a tool call "
+                      "and is measured separately as ruling_changed."),
+            "cells": [{
+                "cell": f"{c['provider']}/{c['model']}/{c['role']}",
+                "free_choice": c["role"] != "critic",
+                "decision_turns": c["decision_turns"],
+                "decision_changed": c["decision_changed"],
+                "rate": c["decision_changed_rate"],
+                "ci95": c["decision_changed_ci95"],
+            } for c in dec_cells],
+        },
+        "cells": out_cells,
+    }
+    os.makedirs(CONFIG.logs_dir, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2, default=str)
+    return report
+
+
 def summary() -> dict:
     """What has been recorded, for the dashboard and for `--replay list`."""
     rows = load_calls()

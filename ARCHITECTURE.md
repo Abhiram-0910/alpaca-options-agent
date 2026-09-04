@@ -38,89 +38,58 @@ deterministic policy maps it to a concrete trade → RiskGate → MCP order → 
   below buy-and-hold once frictions were added; TrustTrade found identical inputs produce
   divergent decisions, which disqualifies a model from anything touching sizing.
   **Rejected:** letting the model pick strikes and sizes. It is what most entries will do.
-- **The model is not reproducible, and we measured it rather than citing it** — TrustTrade's
-  finding that identical inputs produce divergent decisions is the load-bearing claim behind
-  every design choice above, so it was reproduced on this system rather than borrowed. Every
-  LLM call is recorded whole (`agent/replay.py`) and `--replay` re-issues it. At temperature
-  0, a fixed seed, the same model and an **unchanged `system_fingerprint`** — the conditions
-  under which OpenAI's best-effort determinism is supposed to hold — the measured divergence
-  rate is in `logs/replay_report.json` and the export's `determinism` section, with a Wilson
-  95% interval and a count of how many divergences changed *which tool was called* rather
-  than only its arguments. One divergence replaced four
-  `get_option_contracts` reads with a single `place_option_order` — a research turn became
-  an order attempt on byte-identical inputs (decision `5c11b241404d`; the harness only
-  re-issues the request and never executes what comes back, so nothing was placed).
-  **This is why the gate is deterministic Python and not a prompt.** A model that can move
-  from reading data to attempting a trade without its inputs changing cannot be the thing
-  that decides whether a trade is permitted.
-  **Rejected:** claiming reproducibility because temperature is 0. Before this work,
-  temperature and seed were not even set — the runs were not merely non-reproducible, they
-  were not attempting to be.
-- **An evidence block that steers away from its own validated universe** — kept as a finding,
-  because it is the most instructive failure in this build and it never once looked like one.
+- **The model is not reproducible, and we measured it per serving stack rather than pooling**
+  — TrustTrade's finding that identical inputs produce divergent decisions is the load-bearing
+  claim behind every design choice above, so it was reproduced on this system rather than
+  borrowed. Every LLM call is recorded whole (`agent/replay.py`) and `--replay` re-issues it.
 
-  The Proposer proposed a cash-secured put on AAPL **17 consecutive times** and was rejected
-  17 consecutive times for the same reason: AAPL never passed validation. Every layer below
-  it behaved perfectly — the Critic vetoed each time on correct grounds, the arbiter upheld
-  each veto, the risk gate would have refused anyway, nothing reached the account. The
-  pipeline looked like it was working. It was looping.
+  **The replay sends cached data, and that is executable, not asserted.** A recorded request
+  carries the whole conversation including ~108k characters of frozen tool results; the
+  harness re-issues it and never executes what comes back. `verify_replay_isolation.py`
+  blocks DNS for every host except the model provider, replays, and reports every host
+  resolved. It exits non-zero if anything but the provider is contacted. This closes the
+  confound that would otherwise make the whole measurement market-data drift.
 
-  **Cause: the evidence block only listed the symbols that had been backtested.** SPY, QQQ
-  and IWM each carried an explicit "no strategy passed" warning. The other 15 watchlist
-  symbols were absent entirely, so they carried no signal at all. The model read
-  absence-of-mention as absence-of-objection and picked AAPL, the first unmentioned name in
-  the watchlist. The three symbols with evidence were the only three it was warned about.
-  A prompt that presents evidence this way does not merely fail to steer — it steers
-  *away* from the validated universe, and the more thorough the warning on the tested
-  symbols the stronger that push becomes.
+  **Stratified, n=60 per cell, cells and quotability pre-registered in `CELL_RULES` before
+  the run.** Temperature 0, fixed seed where the provider supports one.
 
-  **CORRECTED 4 Sep — the first write-up of this finding was wrong, and the correction is
-  the better finding.** It said the proposals were "byte-identical AAPL". They were not.
-  Checking the payloads rather than the summary line:
+  | cell | n | divergent | 95% CI | decision changed |
+  |---|---|---|---|---|
+  | gpt-4o-mini / proposer *(free choice)* | 60 | **90.0%** | 79.8–95.3% | **40/40 = 100%** (CI 91.2–100%) |
+  | gpt-4o / critic *(tool_choice forced)* | 60 | **98.3%** | 91.1–99.7% | 59/60 = 98.3% (CI 91.1–99.7%) |
+  | gpt-4o-mini / single_agent | 60 | **65.0%** | 52.4–75.8% | — no decision turns |
+  | Qwen2.5-7B / arbiter *(Featherless)* | 60 | n/a | — | **ruling changed 0/60** (CI 0–6.0%) |
 
-  | across 22 AAPL proposals | distinct values |
-  |---|---|
-  | OCC option symbols | **19** |
-  | rationales | **22** |
-  | (symbol, strategy) pairs | **2** |
+  **There is no pooled figure, deliberately.** The cells span 0% to 98%, so no single number
+  describes the system. An earlier 70% was reported before this: it pooled two models, and 31
+  of its 40 replays were one model in one role. It is superseded, not refined.
 
-  Only the *ticker and the strategy label* repeated. Everything else varied, and often
-  incoherently: one proposal was a **call** (`AAPL260904C00305000`) labelled
-  `cash_secured_put`; another proposed a **$145 strike** with a rationale citing "strong
-  support around the $325 level". These are not the outputs of a model stuck in a groove.
+  **The headline is the decision-tool rate, reported per cell and never pooled.** On the free
+  choice cell, **every one of 40 turns where the Proposer actually decided produced a
+  different decision on replay** — 100%, 95% CI 91.2–100%. The critic's 98.3% is not
+  comparable and is not combined with it: its `tool_choice` is forced, so its output space is
+  constrained by construction. Constraint did not buy determinism either.
 
-  So the mechanism is not determinism at all — it is a **prompt-level attractor**. The
-  evidence block warned about the only three symbols that had evidence and said nothing
-  about the other fifteen, so AAPL, first among the unwarned, won every cycle regardless of
-  how much the rest of the output moved. The model was as variable as ever; the funnel it
-  was pouring through had one exit.
+  **Featherless/Qwen is the outlier and the caveat matters more than the number.** Its ruling
+  was identical on all 60 replays, while its *wording* differed on 42 of 60 — deterministic in
+  verdict, not in prose. Its `divergence_rate` reads 0.0% only because "divergent" requires
+  differing tool calls and this responder emits none, so that field is flagged
+  `divergence_rate_meaningful: false` in the export. And it is 4 unique decisions replayed 15×:
+  it answers "is Featherless deterministic on a fixed input", and is **not** a model
+  comparison.
 
-  This also dissolves a contradiction we thought we had. A ~70% per-call divergence rate and
-  "17 identical proposals" would have been in real tension. There were never identical
-  proposals, so there is no tension: same-input replays diverge, and different-input cycles
-  converged on one ticker for a reason that has nothing to do with sampling.
+  `single_agent` is quotable with a caveat carried wherever it appears: 11 unique decisions at
+  5.5× repeats measures same-input determinism, not conversation diversity. Its 65.0% closely
+  matches the 64.5% seen in the earlier run, which is the one continuity between the two
+  measurements.
 
-  **On temperature:** the earlier claim that "temperature 0 exposed it" does not survive
-  either, because there was no repetition to expose. On 2 Sep at temperature 1.0 the
-  proposals varied (one skip, then MSFT); from 3 Sep at temperature 0 they varied too, and
-  simply kept landing on the same ticker. What made the bug legible was the *ticker* column
-  of the log repeating 22 times, which would have looked the same at any temperature.
-
-  **Fixed two ways.** Every watchlist symbol now appears in the evidence block, with
-  never-backtested ones marked `NEVER EVALUATED — not tradeable`, and the prompt states the
-  operational rule instead of hedging it ("if no symbol shows PASSED, the correct output is
-  `action=skip`"). And `run_cycle` now short-circuits: when validation is required and
-  nothing has cleared, the set of approvable proposals is empty, so it logs a structured
-  `no_validated_universe` decision and returns without calling a model at all — 0 tool
-  calls, 0 API calls, $0.00.
-
-  **Rejected:** feeding the Critic's rejection reasons back to the Proposer as memory. The
-  Critic judges *rationale quality* and reads prose, so that gradient teaches the model to
-  phrase its way past the reviewer rather than to propose better trades. The risk gate is
-  deterministic and would still refuse, so the cost would never show up as money — it would
-  show up as a Critic-approved proposal on an unvalidated symbol sitting in the audit trail,
-  which is the more expensive currency here. Also rejected: raising temperature to restore
-  variety, which buys different wrong answers and forfeits the determinism measurement.
+  **This is why the gate is deterministic Python and not a prompt.** A model whose decision
+  changes on 100% of replays of byte-identical input cannot be the thing that decides whether
+  a trade is permitted. One divergence replaced four `get_option_contracts` reads with a
+  single `place_option_order` — a research turn became an order attempt on identical inputs
+  (decision `5c11b241404d`; nothing was placed, the harness never executes).
+  **Rejected:** claiming reproducibility because temperature is 0, and quoting a pooled rate
+  across serving stacks with different non-determinism mechanisms.
 
 - **The gate is priced, not just defended** — `agent/counterfactual.py` re-runs every refused
   strategy through the same simulator that refused it, so the refusal has a dollar figure
