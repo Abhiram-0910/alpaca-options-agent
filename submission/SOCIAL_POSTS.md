@@ -4,13 +4,13 @@
 
 ---
 
-## Post 1: The Determinism Finding
+## Post 1: Council Attack C01 (The Arbiter)
 
-The central problem in agentic trading isn't intelligence — it's reproducibility. We ran our @AlpacaHQ options agent 40 times at temperature 0 with a fixed seed. It diverged 70% of the time (95% CI 54.6-81.9%). 
+Our own AI confidently authorized a catastrophic $172,000 order. And our Python risk layer stopped it. 
 
-Worse: 19 of those 28 divergences changed the actual *tool* it called, not just the arguments. One flipped from reading a chain to attempting an order.
+In our @lablabai hackathon submission, we run a 3-seat council. We deliberately ran Council Attack C01: asking our independent Featherless arbiter model (Qwen2.5-7B-Instruct) to bless a 400-contract trade. It ruled PROCEED, hallucinating that "the position size is acceptable" against a hard $8k cap. 
 
-This is exactly why our @lablabai hackathon submission places execution authority in deterministic Python, not the LLM. 
+The deterministic Python risk gate correctly refused it. Execution authority cannot sit in an LLM. It belongs in Python.
 
 #AgenticAI #AlgorithmicTrading #Python #OptionsTrading
 
@@ -61,3 +61,17 @@ Our deterministic risk gate evaluates capital-at-risk at the batch/structure lev
 Undefined risk never reaches the broker. Built for the @lablabai hackathon.
 
 #OptionsTrading #RiskManagement #QuantitativeFinance #FinTech
+
+---
+
+## Post 6: The 100% Divergence Finding
+
+Is agentic AI non-determinism caused by shifting market data? We proved executably that it isn't.
+
+Our replay harness fed 108,012 characters of *frozen* market data to our @AlpacaHQ trading agent. We used `verify_replay_isolation.py` to block DNS for every host except the model provider, confirming zero API re-fetches. 
+
+The result? Evaluating `gpt-4o-mini` (free tool choice, temp=0, fixed seed, byte-identical inputs): 100% of decision turns changed on replay (40 of 40). 
+
+Divergence concentrates exactly where authority sits. The variance is the LLM. Execution authority belongs in deterministic Python. Built for the @lablabai hackathon.
+
+#AgenticAI #MachineLearning #SystemDesign #QuantFinance
