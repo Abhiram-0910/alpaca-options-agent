@@ -14,18 +14,18 @@
 
 So instead of building a prompt that guesses strikes, we built a deterministic risk gate that enforces safety, and a Proposer/Critic pipeline that has to prove an edge before it's allowed to touch the Alpaca MCP server."
 
-## 0:30 - 1:45 | The Agent Running Live & The Veto (75 seconds)
+## 0:30 - 1:45 | The Arbiter & Council Attack C01 (75 seconds)
 
-**[Visual: Screen recording. Terminal on the left running the agent, browser on the right showing the Alpaca paper dashboard and our local Vercel-deployed UI.]**
+**[Visual: Screen recording. Terminal on the left running the agent, browser on the right showing the Risk Gate dashboard.]**
 
 **Speaker:**
-"Here is the agent running live. Our pipeline uses two models. A Proposer agent suggests a regime and a parameter set. But before any order is formed, a Critic agent evaluates that proposal against our hard validation evidence.
+"Here is the agent running live. Our pipeline uses a Proposer, a Critic, and an independent third-seat Arbiter running on Featherless.
 
-Watch the terminal here. The Proposer just requested a cash-secured put on MSFT. 
+We ran an adversarial attack we call C01. We asked the Arbiter—a Qwen 2.5 7B model—to bless a 400-contract order. 
 
-This is the strongest part of our build: the Critic agent actively vetos the proposal. It rejects the trade because the Proposer cited no backtest evidence on a symbol that has never cleared our validation gate.
+The Arbiter confidently ruled 'PROCEED', rationalizing: 'The strategy is validated and the position size is acceptable.' This was completely false. The trade put $172,000 at risk against a hard $8,000 cap. 
 
-Our agent is designed to refuse bad trades. This single Proposer/Critic cycle costs exactly two point two cents. The model proposes, but deterministic Python code disposes. If a trade bypasses this risk gate, the system halts."
+But the order never reached Alpaca. Our deterministic Python Risk Gate caught the LLM hallucination and blocked it. This is the thesis demonstrated instead of asserted: you can have a third-party AI confidently authorize a catastrophic trade, and your deterministic Python layer must be the thing that stops it."
 
 ## 1:45 - 2:45 | The Validation Finding (60 seconds)
 

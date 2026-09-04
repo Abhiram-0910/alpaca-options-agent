@@ -25,6 +25,42 @@ in-session. Then submission materials, which remain entirely undone with ~44 hou
 
 ## Sessions
 
+### 4 Sep 2026 — merged submission materials; corrected model attribution — *Claude Code*
+
+Merged `origin/submission-materials` into `main`. No conflicts: the branch's merge base
+predates `verify_replay_isolation.py`, `test_no_clock_dependency.py`, `docs/WORKLIST.md` and
+the test clock pins, so they were absent from it rather than deleted by it and all survived.
+Only `README.md`, `submission/` and `output.pdf` changed. Nothing under `agent/` or the test
+files was touched.
+
+**Attribution error corrected in README.md.** The merged copy stated the agent runs on
+Claude/Anthropic in nine places — setup instructions, run commands, the cost section, and a
+"known limitations" bullet claiming `multi_agent.py` had "never been run against the real
+Anthropic API". None of that is true. Verified against the code:
+
+| Seat | Model | Provider | Verified at |
+|---|---|---|---|
+| Proposer | `gpt-4o-mini` | OpenAI | `agent/config.py:45` |
+| Critic | `gpt-4o` | OpenAI | `agent/config.py:46` |
+| Single-agent | `gpt-4o-mini` | OpenAI | `agent/config.py:30` |
+| Arbiter | `Qwen/Qwen2.5-7B-Instruct` | Featherless | `agent/arbiter.py:49` |
+
+`agent/config.py:27` does define `CLAUDE_MODEL` and `agent/live_agent.py` holds an Anthropic
+path, but both are reachable only via `--provider anthropic`; `main.py:160` defaults to
+`openai` and `ANTHROPIC_API_KEY` was empty throughout. Empirically, of 100 recorded LLM calls
+81 went to OpenAI and 19 to Featherless — none to Anthropic. A "Which models actually run"
+table with these citations is now in the README so the claim is checkable rather than stated.
+
+**Two fixes to the opening**, read as a judge would:
+- It never said what the project *is*. It now opens with the agent, the 21/21 refusal, and
+  the +$8.90 demonstration result before the thesis.
+- It said the arbiter was "confidently authorising a catastrophic trade". The arbiter is
+  advisory by construction and cannot authorise anything — it can only decline to end a
+  cycle. Corrected, since our own docs make that distinction and a hostile reader would
+  find it.
+
+No dead claims from HANDOFF §Dead claims appear in the README.
+
 ### 4 Sep 2026 — Tier 0 audit: one claim confirmed, two corrected — *Claude Code*
 
 **0.1 CONFIRMED — the harness replays cached values, it does not re-fetch.** `replay()` reads

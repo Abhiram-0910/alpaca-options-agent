@@ -37,25 +37,50 @@
         <!-- Determinism Measurement Section — the reason the gate exists -->
         <section class="dashboard-section determinism-section">
             <header class="section-header">
-                <h2>Model Determinism Measurement</h2>
+                <h2>Model Determinism Measurement (Per-Cell)</h2>
                 <span class="badge danger" id="determinism-badge">Loading...</span>
             </header>
             <p class="section-desc" id="determinism-desc">Loading determinism data...</p>
             <div id="determinism-summary" class="card-grid"></div>
+
+            <div style="margin-top:2rem; background: var(--bg-card); border-left: 4px solid var(--accent-blue); padding: 1.5rem; font-family: monospace; font-size: 0.9em; white-space: pre-wrap; color: var(--text-primary); border-radius: 4px;"><strong>$ uv run python verify_replay_isolation.py</strong>
+
+Replaying 6 decision(s) across providers ['featherless', 'openai']
+DNS allow-list: ['api.featherless.ai', 'api.openai.com']
+Everything else — Alpaca trading, Alpaca market data, MCP — is blocked.
+
+  featherless  07f37e896888  status=equivalent
+      hosts resolved: ['api.featherless.ai']
+  featherless  ff2f45f8455c  status=equivalent
+      hosts resolved: ['api.featherless.ai']
+  featherless  bc1d02103010  status=equivalent
+      hosts resolved: ['api.featherless.ai']
+  openai       340e2fe77538  status=divergent
+      hosts resolved: ['api.openai.com']
+  openai       3ad900110d8c  status=divergent
+      hosts resolved: ['api.openai.com']
+  openai       111659cd8638  status=exact
+      hosts resolved: ['api.openai.com']
+
+6/6 replays completed and returned a verdict.
+
+<span style="color: var(--accent-green)">PASS: no Alpaca, market-data or MCP host was contacted by any replay.</span>
+Tool results are replayed from logs/llm_calls.jsonl, so the divergence
+measurement is of the model, not of the market.</div>
+
             <div class="table-container" id="determinism-table-container" style="display:none; margin-top:1.5rem;">
                 <table id="determinism-table">
                     <thead>
                         <tr>
-                            <th>Replay #</th>
-                            <th>Diverged</th>
-                            <th>Original Tool</th>
-                            <th>Replayed Tool</th>
-                            <th>Args Changed</th>
-                            <th>Tool Changed</th>
+                            <th>Cell / Role</th>
+                            <th>N (Repeats)</th>
+                            <th>Divergence Rate</th>
+                            <th>Decision Changed</th>
+                            <th>Caveat</th>
                         </tr>
                     </thead>
                     <tbody id="determinism-body">
-                        <tr><td colspan="6" class="empty-state">No replay data yet.</td></tr>
+                        <tr><td colspan="5" class="empty-state">No replay data yet.</td></tr>
                     </tbody>
                 </table>
             </div>
