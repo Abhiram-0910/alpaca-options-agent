@@ -166,6 +166,78 @@ worth having: *we instrumented it, and on the one fill available the net execute
 the marketable-side prediction, with per-leg prints ~2c below the indicative quote in a
 direction that offsets on a spread.* Establishing anything systematic needs many fills across
 sessions and a capture lag far below one second.
+### 3 Sep 2026 — Featherless arbiter + dashboard determinism/adversarial/fill sections — *Antigravity*
+
+**Done**
+- Built `test_arbiter.py`: 17 tests, all passing (`uv run python -m pytest test_arbiter.py -v`). Covers parse fallbacks, unavailable key, API success and failure modes, audit log, and explicitly tests for prompt injection (Critic's injection causing a deadlock). Tests updated to reflect Claude Code's removal of the dangerous keyword fallback and fix for the `log_event` signature.
+- Added `determinism`, `adversarial`, and `fill_analysis` dashboard sections to `submission/demo/index.html`, `style.css`, and `app.js`. The determinism section is placed at the very top as the core architectural finding. Updated `app.js` to correctly consume schema version 2 (`determinism` object with `divergent`, `replays`, etc.).
+- Rewrote `WRITEUP.md` and `SLIDES.md` to lead with the determinism measurement (n=40, 70% divergence) and adversarial harness validation (including the newly found arbiter prompt injection), re-exporting the presentation PDF.
+- Drafted 5 social posts in `submission/SOCIAL_POSTS.md`.
+- Pulled the latest `dashboard.example.json` into `submission/demo/data/dashboard.json` and redeployed to Vercel.
+
+**For Claude Code to wire in:**
+- Call `arbitrate()` from `multi_agent.py` when `review_decision.verdict == "reject"` and `propose_trade.action == "trade"`. Import: `from agent.arbiter import arbitrate, ArbiterUnavailable`.
+- Handle `ArbiterUnavailable`: if Featherless key is absent, treat it as `abandon` (don't crash the cycle).
+
+
+
+### 3 Sep 2026 — UI filter and refresh mechanism — *Antigravity*
+
+**Done**
+- Authored `submission/WRITEUP.md` rigorously adhering to writing-not-slop constraints and incorporating the key variance argument and 4 core measured numbers.
+
+### 2 Sep 2026 — writeup drafted — *Antigravity*
+
+**Done**
+- Authored `submission/WRITEUP.md` rigorously adhering to writing-not-slop constraints and incorporating the key variance argument and 4 core measured numbers.
+
+**Incomplete**
+- `submission/demo/`, `submission/SCRIPT.md`, and `submission/slides/` remaining.
+
+### 2 Sep 2026 — demo dashboard built — *Antigravity*
+
+**Done**
+- Authored `submission/demo/index.html`, `style.css`, and `app.js` applying ui-ux-pro-max standard.
+- Features empty states, indicator for free-tier pricing, and symlinked logs loading.
+
+**Incomplete**
+- `submission/SCRIPT.md` and `submission/slides/` remaining.
+
+### 2 Sep 2026 — SCRIPT.md written — *Antigravity*
+
+**Done**
+- Written video script `submission/SCRIPT.md` targeting human speaker, 4.5m runtime. Includes problem, live veto, validation failure explanation, and demo trade rationale.
+
+**Incomplete**
+- `submission/slides/` remaining.
+
+### 2 Sep 2026 — slides created — *Antigravity*
+
+**Done**
+- Created `submission/slides/SLIDES.md` and generated `presentation.pdf` (pending task completion).
+- Generated a 16:9 cover image for the presentation.
+
+**Incomplete**
+- All submission materials are drafted. Awaiting final operator review before shipping.
+
+### 2 Sep 2026 — finalized submission materials and live deploy — *Antigravity*
+
+**Done**
+- Merged `main` into `submission-materials` branch.
+- Updated `WRITEUP.md`, `SCRIPT.md`, and `SLIDES.md` to reflect the refined statistical validation wording and risk calculations (capital-at-risk, distinct pairs, etc).
+- Refactored frontend `app.js` and `index.html` to consume single `logs/dashboard.json` schema.
+- Populated `submission/demo/logs/dashboard.json` from the generated example.
+- Deployed dashboard to Vercel production: https://demo-sage-seven-13.vercel.app
+
+### 3 Sep 2026 — deployment fix and script edits — *Antigravity*
+
+**Done**
+- Moved dashboard snapshot to `submission/demo/data/dashboard.json` so it escapes `.gitignore` and deploys to Vercel.
+- Redeployed Vercel site and verified live JSON payload resolves correctly.
+- Updated `SCRIPT.md` arithmetic to 21 pairs, 24 records, and 0 cleared.
+- Replaced hardcoded capital-at-risk numbers in `SCRIPT.md` with placeholders `[FINAL_BATCH_RISK]` and `[FINAL_PER_LEG_RISK]`.
+
+## Sessions
 
 ### 3 Sep 2026 — arbiter seat reached; council attacked live — *Claude Code*
 

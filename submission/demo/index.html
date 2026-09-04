@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpaca Options Agent | Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="banner">
+        <div class="banner-content">
+            <span class="icon">⚠️</span>
+            <p><strong>Notice:</strong> Options quotes are provided by Alpaca's free-tier Indicative Pricing Feed, not OPRA. Prices are simulated and not real-time NBBO.</p>
+        </div>
+    </div>
+
+    <header class="app-header">
+        <div class="container">
+            <h1>Alpaca Options Agent</h1>
+            <p class="subtitle">Deterministic Risk Enforcement & Validation Gate</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Account State Section -->
+        <section class="dashboard-section">
+            <header class="section-header">
+                <h2>Current Account State</h2>
+                <div class="status-indicator"></div>
+            </header>
+            <div id="account-container" class="card-grid">
+                <!-- Populated by JS -->
+                <div class="empty-state">No account data available.</div>
+            </div>
+        </section>
+
+        <!-- Determinism Measurement Section — the reason the gate exists -->
+        <section class="dashboard-section determinism-section">
+            <header class="section-header">
+                <h2>Model Determinism Measurement</h2>
+                <span class="badge danger" id="determinism-badge">Loading...</span>
+            </header>
+            <p class="section-desc" id="determinism-desc">Loading determinism data...</p>
+            <div id="determinism-summary" class="card-grid"></div>
+            <div class="table-container" id="determinism-table-container" style="display:none; margin-top:1.5rem;">
+                <table id="determinism-table">
+                    <thead>
+                        <tr>
+                            <th>Replay #</th>
+                            <th>Diverged</th>
+                            <th>Original Tool</th>
+                            <th>Replayed Tool</th>
+                            <th>Args Changed</th>
+                            <th>Tool Changed</th>
+                        </tr>
+                    </thead>
+                    <tbody id="determinism-body">
+                        <tr><td colspan="6" class="empty-state">No replay data yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Risk Gate Decisions Section -->
+        <section class="dashboard-section">
+            <header class="section-header">
+                <h2>Risk Gate Decisions</h2>
+                <span class="badge danger">Strict Enforcement Active</span>
+            </header>
+            <p class="section-desc" id="read-tool-desc">Loading decisions...</p>
+            <div class="table-container">
+                <table id="risk-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Action</th>
+                            <th>Symbol</th>
+                            <th>Cap Risk Evaluated</th>
+                            <th>Status</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody id="risk-body">
+                        <!-- Populated by JS -->
+                        <tr><td colspan="6" class="empty-state">No risk decisions recorded yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Validation Graveyard Section -->
+        <section class="dashboard-section">
+            <header class="section-header">
+                <h2>Validation Graveyard</h2>
+                <span class="badge warning" id="validation-badge">Loading...</span>
+            </header>
+            <p class="section-desc" id="validation-desc">Loading validation data...</p>
+            <div class="table-container">
+                <table id="validation-table">
+                    <thead>
+                        <tr>
+                            <th>Strategy</th>
+                            <th>Symbol</th>
+                            <th>Win Rate</th>
+                            <th>Sharpe</th>
+                            <th>Scope</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody id="validation-body">
+                        <!-- Populated by JS -->
+                        <tr><td colspan="6" class="empty-state">No validation records found.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Adversarial Harness Section -->
+        <section class="dashboard-section adversarial-section">
+            <header class="section-header">
+                <h2>🛡️ Adversarial Gate Harness</h2>
+                <span class="badge danger" id="adversarial-badge">Loading...</span>
+            </header>
+            <p class="section-desc" id="adversarial-desc">Loading adversarial attack results...</p>
+            <div class="table-container">
+                <table id="adversarial-table">
+                    <thead>
+                        <tr>
+                            <th>Attack Type</th>
+                            <th>Payload</th>
+                            <th>Expected Stop</th>
+                            <th>Actual Stop</th>
+                            <th>Rejection Reason</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adversarial-body">
+                        <!-- Populated by JS -->
+                        <tr><td colspan="6" class="empty-state">No adversarial harness data available. Run the agent to generate.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Fill Analysis Section -->
+        <section class="dashboard-section">
+            <header class="section-header">
+                <h2>Fill Analysis</h2>
+                <span class="badge" id="fill-badge">Loading...</span>
+            </header>
+            <p class="section-desc">Indicative quote captured immediately before each order versus the simulated fill price, per leg.</p>
+            <div class="table-container">
+                <table id="fill-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Symbol</th>
+                            <th>Leg</th>
+                            <th>Side</th>
+                            <th>Pre-order Quote</th>
+                            <th>Fill Price</th>
+                            <th>Delta</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fill-body">
+                        <!-- Populated by JS -->
+                        <tr><td colspan="7" class="empty-state">No fill analysis data available. Run the agent to generate.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <!-- Counterfactual Section -->
+        <section class="dashboard-section">
+            <header class="section-header">
+                <h2>The Cost of Refusal (Counterfactual)</h2>
+                <span class="badge" id="counterfactual-badge">Loading...</span>
+            </header>
+            <p class="section-desc" id="counterfactual-desc">Loading counterfactual data...</p>
+            <div id="counterfactual-summary" class="card-grid"></div>
+        </section>
+
+        <!-- Arbiter Section -->
+        <section class="dashboard-section">
+            <header class="section-header">
+                <h2>Featherless Arbiter (Third Seat)</h2>
+                <span class="badge" id="arbiter-badge">Loading...</span>
+            </header>
+            <p class="section-desc" id="arbiter-desc">Loading arbiter data...</p>
+            <div id="arbiter-summary" class="card-grid"></div>
+        </section>
+
+        <!-- Heartbeats Section -->
+        <section class="dashboard-section">
+            <header class="section-header">
+                <h2>System Heartbeats (Autonomy)</h2>
+                <span class="badge" id="heartbeats-badge">Loading...</span>
+            </header>
+            <p class="section-desc" id="heartbeats-desc">Loading heartbeats data...</p>
+            <div id="heartbeats-summary" class="card-grid"></div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container" id="footer-text">
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
